@@ -51,9 +51,9 @@ Base91は、おまけとして雑学的に解説します。
 
 ## 📸 スクリーンショット
 
-!["hello"のエンコード結果](assets/screenshot.png)
-
-*"hello"のエンコード結果*
+>!["hello"のエンコード結果](assets/screenshot.png)
+>
+>*"hello"のエンコード結果*
 
 ---
 
