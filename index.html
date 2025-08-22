@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>BaseXX Visualizer — Base32/58/64/91比較ツール</title>
   <meta name="description" content="Base64を基準にBase32/58/91との違いを体験的に学べる教育用ビジュアライザー" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: https:; font-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none';" />
   <link rel="stylesheet" href="./style.css" />
   <script defer src="./script.js"></script>
 </head>
@@ -33,6 +34,11 @@
           本ツールは <strong>Base64を基準</strong> に、Base32・Base58・Base91 の
           <em>文字集合・用途・設計思想</em> を俯瞰できる教育用ビジュアライザーです。
         </p>
+        <div class="intro-note">
+          <strong>💡 なぜ誤読が問題になるの？</strong><br>
+          通常はコピー&ペーストで回避できますが、二要素認証のシークレットキーなど、
+          QRコードが使えない場合の手動入力では誤読リスクが現実的な問題となります。
+        </div>
       </div>
 
       <div class="card">
@@ -88,7 +94,7 @@
 
     <section id="panel-playground" class="tab-panel" role="tabpanel" aria-labelledby="playground">
       <h2>体験（Playground）</h2>
-      <div class="grid-2">
+      <div class="playground-container">
         <div class="card">
           <h3>入力</h3>
           <div class="row">
@@ -149,7 +155,6 @@
               <div class="meta"><span id="len91">長さ: -</span> / <span id="rate91">膨張率: -</span></div>
             </div>
           </div>
-          <p class="note">※ 初期版ではエンコード/デコードは未実装です（UIの雛形）。</p>
         </div>
       </div>
     </section>
@@ -212,23 +217,89 @@
       </div>
 
       <div class="card">
-        <h3>インタラクティブ例（UIひな形）</h3>
-        <div class="grid-2">
-          <div>
-            <label for="errSource" class="label">Base64 文字列（例）</label>
-            <input id="errSource" type="text" class="input" value="QUJDREVGRw==" />
-            <div class="row wrap">
-              <label class="switch"><input type="checkbox" data-swap="O0" />O ↔ 0 を混入</label>
-              <label class="switch"><input type="checkbox" data-swap="Il" />I ↔ l を混入</label>
-              <label class="switch"><input type="checkbox" data-swap="I1" />I ↔ 1 を混入</label>
-              <label class="switch"><input type="checkbox" data-swap="+ " />+ ↔ スペース を混入</label>
+        <h3>インタラクティブ例</h3>
+        <div class="demo-container">
+          <div class="demo-patterns">
+            <h4>誤読パターンを選んで比較してみてください：</h4>
+            <div class="pattern-buttons">
+              <button class="pattern-btn" data-pattern="O0">
+                <span class="pattern-title">O ↔ 0 の混同</span>
+                <span class="pattern-desc">オー（O）とゼロ（0）の誤読</span>
+              </button>
+              <button class="pattern-btn" data-pattern="Il">
+                <span class="pattern-title">I ↔ l の混同</span>
+                <span class="pattern-desc">アイ（I）とエル小文字（l）の誤読</span>
+              </button>
+              <button class="pattern-btn" data-pattern="I1">
+                <span class="pattern-title">I ↔ 1 の混同</span>
+                <span class="pattern-desc">アイ（I）とイチ（1）の誤読</span>
+              </button>
+              <button class="pattern-btn" data-pattern="plus">
+                <span class="pattern-title">+ ↔ スペース の混同</span>
+                <span class="pattern-desc">プラス（+）とスペースの誤読</span>
+              </button>
+              <button class="pattern-btn" data-pattern="slash">
+                <span class="pattern-title">/ ↔ \ の混同</span>
+                <span class="pattern-desc">スラッシュ（/）とバックスラッシュの誤読</span>
+              </button>
             </div>
-            <button id="btnApplyErrors" class="btn">誤読を入れる（デモ）</button>
           </div>
-          <div>
-            <label class="label">結果（デモ表示）</label>
-            <pre id="errResult" class="out-text"></pre>
-            <p class="note">※ 初期版は UI の雛形のみ。将来、復号失敗やデータ化けの挙動をここに表示。</p>
+          
+          <div class="demo-results" id="demoResults" style="display: none;">
+            <div class="pattern-info">
+              <h4 id="currentPattern">パターン名</h4>
+              <p id="patternDescription">パターンの説明</p>
+            </div>
+            
+            <div class="highlight-legend">
+              <div class="legend-item">
+                <span class="char-highlight char-original">O</span> 元の文字（正しい）
+              </div>
+              <div class="legend-item">
+                <span class="char-highlight char-corrupted">0</span> 誤読された文字（問題）
+              </div>
+            </div>
+            
+            <div class="demo-comparison">
+              <div class="comparison-item">
+                <h5>正しいBase64</h5>
+                <div class="result-box correct">
+                  <div class="result-label">元の文字列:</div>
+                  <pre id="originalB64" class="result-text">-</pre>
+                  <div class="result-label">デコード結果:</div>
+                  <pre id="originalDecoded" class="result-text decoded">-</pre>
+                </div>
+              </div>
+              
+              <div class="comparison-item">
+                <h5>誤読後Base64</h5>
+                <div class="result-box error">
+                  <div class="result-label">誤読後の文字列:</div>
+                  <pre id="corruptedB64" class="result-text">-</pre>
+                  <div class="result-label">デコード結果:</div>
+                  <pre id="corruptedDecoded" class="result-text decoded error-text">-</pre>
+                </div>
+              </div>
+            </div>
+            
+            <div class="demo-explanation">
+              <h4>Base32/Base58ではこの問題が起きにくい理由:</h4>
+              <ul class="comparison-benefits">
+                <li><strong>Base32:</strong> A-Z、2-7のみ使用。混同しやすい文字を除外</li>
+                <li><strong>Base58:</strong> 0、O、I、l、+、/を意図的に除外</li>
+                <li><strong>結果:</strong> 人間による誤読・誤入力のリスクが大幅に減少</li>
+              </ul>
+              
+              <div class="practical-note">
+                <h5>💡 実用上の重要性</h5>
+                <p>
+                  <strong>コピー&ペースト</strong>なら誤読の問題は回避できますが、
+                  <strong>二要素認証（TOTP）のシークレットキー</strong>などは手打ち入力される場合があります。
+                  特にQRコードが読み取れない環境や、異なるデバイス間での設定時には手動入力が必要となるため、
+                  Base32の採用により入力ミスによるセットアップ失敗を防げます。
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -258,7 +329,7 @@
 
   <footer>
     <div class="footer">
-      🔗 GitHubリポジトリはこちら（ <a href="https://github.com/ipusiron/basexx-visualizer" target="_blank">ipusiron/basexx-visualizer</a> ）
+      🔗 GitHubリポジトリはこちら（ <a href="https://github.com/ipusiron/basexx-visualizer" target="_blank" rel="noopener noreferrer">ipusiron/basexx-visualizer</a> ）
     </div>
   </footer>
 </body>
