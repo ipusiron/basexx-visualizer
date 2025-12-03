@@ -1,11 +1,38 @@
 <!--
 ---
-title: BaseXX Visualizer
-category: encoding
-difficulty: 1
-description: Educational tool to compare Base32, Base58, Base64, and Base91 encodings with visual demos.
-tags: [base32, base58, base64, base91, encoding, education, visualization]
-demo: https://ipusiron.github.io/basexx-visualizer/
+id: day052
+slug: basexx-visualizer
+
+title: "BaseXX Visualizer"
+
+subtitle_ja: "Base32/58/64/91比較ツール"
+subtitle_en: "Base32/58/64/91 Encoding Comparison Tool"
+
+description_ja: "Base64を基準にBase32・Base58・Base91の違いを体験的に学べる教育用ビジュアライザー。誤読デモやエンコード効率の比較機能を搭載。"
+description_en: "Educational visualizer to compare Base32, Base58, Base64, and Base91 encodings. Features human error demos and encoding efficiency comparisons."
+
+category_ja:
+  - エンコーディング
+  - 表現変換
+category_en:
+  - Encoding
+  - Representation Conversion
+
+difficulty: 3
+
+tags:
+  - base32
+  - base58
+  - base64
+  - base91
+  - encoding
+  - visualization
+  - TOTP
+
+repo_url: "https://github.com/ipusiron/basexx-visualizer"
+demo_url: "https://ipusiron.github.io/basexx-visualizer/"
+
+hub: true
 ---
 -->
 
