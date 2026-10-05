@@ -38,7 +38,15 @@ test('画面のスクリプトが使うキーは、すべて辞書にある（�
   const keys = [...src.matchAll(/\bt\('([a-z0-9]+\.[A-Za-z0-9.]+)'/g)].map((m) => m[1]);
   assert.ok(keys.length >= 25, String(keys.length));
   for (const k of keys) assert.ok(MESSAGES.ja[k] !== undefined, k);
-  for (const e of ['char', 'length', 'padding', 'empty', 'long']) assert.ok(MESSAGES.ja[`dec.err.${e}`], e);
+  for (const e of ['char', 'length', 'padding', 'empty', 'long', 'range', 'check']) assert.ok(MESSAGES.ja[`dec.err.${e}`], e);
+  for (const e of ['empty', 'uri', 'type', 'secret.missing']) assert.ok(MESSAGES.ja[`otp.err.${e}`], e);
+  for (const w of ['padding', 'short', 'recommend', 'hmac', 'issuer']) assert.ok(MESSAGES.ja[`otp.warn.${w}`], w);
+  for (const k of ['base64', 'base32']) assert.ok(MESSAGES.ja[`bits.note.${k}`], k);
+  const X = load('js/basexx-extras.js').BaseXXExtras;
+  for (const f of X.FORMAT_NAMES) assert.ok(MESSAGES.ja[`detect.f.${f}`], f);
+  const rows = [...read('script.js').match(/const VAR_ROWS = \[([\s\S]*?)\];/)[1].matchAll(/\['([A-Za-z0-9]+)'/g)].map((m) => m[1]);
+  assert.equal(rows.length, 8);
+  for (const k of rows) assert.ok(MESSAGES.ja[`var.diff.${k}`], k);
   for (const e of ['char', 'odd']) assert.ok(MESSAGES.ja[`enc.err.${e}`], e);
   for (const k of C.KINDS) assert.ok(MESSAGES.ja[`alphabet.${k}`], k);
   const patterns = [...read('script.js').match(/const PATTERNS = \{([\s\S]*?)\n {2}\};/)[1].matchAll(/^ {4}([A-Za-z0-9]+):/gm)].map((m) => m[1]);
@@ -47,7 +55,7 @@ test('画面のスクリプトが使うキーは、すべて辞書にある（�
 });
 
 test('画面のスクリプトに日本語の文字列を直接書かない（文言は辞書に置く）', () => {
-  for (const f of ['script.js', 'js/basexx-core.js', 'js/theme.js', 'js/i18n.js']) {
+  for (const f of ['script.js', 'js/basexx-core.js', 'js/basexx-extras.js', 'js/theme.js', 'js/i18n.js']) {
     const code = read(f).split('\n').filter((line) => !/^\s*\/\//.test(line)).map((line) => line.replace(/\s\/\/.*$/, '')).join('\n');
     for (const m of code.matchAll(/'[^'\n]*'|`[^`\n]*`/g)) assert.doesNotMatch(m[0], JAPANESE, `${f}: ${m[0]}`);
   }

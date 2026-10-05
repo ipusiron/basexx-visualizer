@@ -26,7 +26,12 @@
   const MAX_CHARS = 8192; // デコードする文字数の上限
 
   const SPACE = /^[ \t\r\n]$/;
-  const INDEX = Object.fromEntries(KINDS.map((k) => [k, new Map([...ALPHABETS[k]].map((c, i) => [c, i]))]));
+  // 字母の文字から番号を引く表（字母ごとに1回だけ作る）
+  const INDEX = new Map();
+  const indexOf = (alphabet) => {
+    if (!INDEX.has(alphabet)) INDEX.set(alphabet, new Map([...alphabet].map((c, i) => [c, i])));
+    return INDEX.get(alphabet);
+  };
 
   const fail = (error, pos, ch) => ({ ok: false, error, pos, ch });
 
@@ -55,11 +60,12 @@
   const validRemainder = (r, bits) => r === 0 || (r * bits >= 8 && (r * bits) % 8 < bits);
 
   // 字母にない文字は位置を付けてエラーにする。空白と改行は skipSpace のときだけ読み飛ばす。
-  // 末尾の = は省いてもよいが、付けるなら数をそろえる。余りのビットが0でないもの（RFC 4648 §3.5）は loose で知らせる
-  function decodeBits(text, kind, bits, block, opts) {
+  // 末尾の = は省いてもよいが、付けるなら数をそろえる。余りのビットが0でないもの（RFC 4648 §3.5）は loose で知らせる。
+  // opts.fold なら小文字も読む（Base32 系）
+  function decodeBits(text, alphabet, bits, block, opts) {
     const skipSpace = !opts || opts.skipSpace !== false;
-    const fold = kind === 'base32';
-    const map = INDEX[kind];
+    const fold = !!(opts && opts.fold);
+    const map = indexOf(alphabet);
     const values = [];
     let pads = 0;
     let skipped = 0;
@@ -100,8 +106,8 @@
 
   const encodeBase64 = (bytes, pad = true) => encodeBits(bytes, ALPHABETS.base64, 6, 4, pad);
   const encodeBase32 = (bytes, pad = true) => encodeBits(bytes, ALPHABETS.base32, 5, 8, pad);
-  const decodeBase64 = (text, opts) => decodeBits(text, 'base64', 6, 4, opts);
-  const decodeBase32 = (text, opts) => decodeBits(text, 'base32', 5, 8, opts);
+  const decodeBase64 = (text, opts) => decodeBits(text, ALPHABETS.base64, 6, 4, opts);
+  const decodeBase32 = (text, opts) => decodeBits(text, ALPHABETS.base32, 5, 8, { ...opts, fold: true });
 
   // ===== Base58（バイト列を1つの大きな数として58進に直す。先頭の 00 は1バイトごとに「1」） =====
   function encodeBase58(bytes) {
@@ -125,9 +131,9 @@
   }
 
   // 文字を検査して字母の番号の列にする（Base58・basE91 で共通。= も字母にない文字として扱う）
-  function readSymbols(text, kind, opts) {
+  function readSymbols(text, alphabet, opts) {
     const skipSpace = !opts || opts.skipSpace !== false;
-    const map = INDEX[kind];
+    const map = indexOf(alphabet);
     const values = [];
     let skipped = 0;
     let pos = 0;
@@ -146,7 +152,7 @@
   }
 
   function decodeBase58(text, opts) {
-    const r = readSymbols(text, 'base58', opts);
+    const r = readSymbols(text, ALPHABETS.base58, opts);
     if (!r.ok) return r;
     let zeros = 0;
     while (zeros < r.values.length && r.values[zeros] === 0) zeros++;
@@ -210,7 +216,7 @@
 
   // 原作の復号は字母にない文字をすべて読み飛ばす。ここでは空白と改行だけを読み飛ばし、ほかはエラーにする
   function decodeBase91(text, opts) {
-    const r = readSymbols(text, 'base91', opts);
+    const r = readSymbols(text, ALPHABETS.base91, opts);
     if (!r.ok) return r;
     const out = [];
     let v = -1;
@@ -341,7 +347,10 @@
     MAX_BYTES,
     MAX_CHARS,
     RATIOS,
+    SPACE,
+    fail,
     encodeBits,
+    decodeBits,
     encodeBase64,
     encodeBase32,
     encodeBase58,

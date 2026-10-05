@@ -6,9 +6,9 @@ const html = read('index.html');
 const C = core();
 const { MESSAGES, t } = load('js/messages.js').BaseXXMessages;
 const { parseVars } = load('js/i18n.js').BaseXXI18n;
-const SCRIPTS = ['script.js', 'js/basexx-core.js', 'js/messages.js', 'js/i18n.js', 'js/theme.js', 'js/theme-init.js'];
+const SCRIPTS = ['script.js', 'js/basexx-core.js', 'js/basexx-extras.js', 'js/messages.js', 'js/i18n.js', 'js/theme.js', 'js/theme-init.js'];
 const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
-const TABS = ['overview', 'convert', 'length', 'misread', 'base91'];
+const TABS = ['overview', 'convert', 'bits', 'length', 'misread', 'variants', 'base91'];
 
 test('CSP はスクリプト・スタイルを同じ場所のファイルだけに限り、unsafe-inline と外部の通信を許さない', () => {
   const csp = html.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)[1];
@@ -23,7 +23,7 @@ test('HTML に style 属性・インラインのスクリプト・イベント�
   assert.doesNotMatch(html, /\sstyle=/);
   assert.doesNotMatch(html, /\son[a-z]+=/i);
   const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
-  assert.deepEqual(scripts, ['js/theme-init.js', 'js/basexx-core.js', 'js/messages.js', 'js/i18n.js', 'js/theme.js', 'script.js']);
+  assert.deepEqual(scripts, ['js/theme-init.js', 'js/basexx-core.js', 'js/basexx-extras.js', 'js/messages.js', 'js/i18n.js', 'js/theme.js', 'script.js']);
   assert.equal((html.match(/<script/g) || []).length, scripts.length);
   for (const a of html.match(/<a [^>]*>/g)) assert.match(a, /target="_blank" rel="noopener noreferrer"/, a);
 });
@@ -48,12 +48,25 @@ test('ボタンは type="button"。入力欄は label の for か、label で囲
   }
 });
 
-test('方式を選ぶボタンは aria-pressed を持ち、最初の1つだけ押されている', () => {
-  for (const attr of ['data-kind', 'data-pattern']) {
-    const states = [...html.matchAll(new RegExp(`class="chip"? ?[a-z ]*" ${attr}="[^"]+" aria-pressed="(true|false)"`, 'g'))].map((m) => m[1]);
-    assert.deepEqual(states, ['true', ...Array(states.length - 1).fill('false')], attr);
-    assert.ok(states.length >= 4, attr);
+test('選ぶボタンの組は aria-pressed を持ち、押されているのは1つだけ（画面の処理の初期値と同じもの）', () => {
+  const src = read('script.js');
+  const initial = { 'data-kind': 'base64', 'data-pattern': 'O0', 'data-bits-kind': 'base64', 'data-detect-format': 'crockfordCheck' };
+  for (const [attr, first] of Object.entries(initial)) {
+    const chips = [...html.matchAll(new RegExp(`class="chip[a-z ]*" ${attr}="([^"]+)" aria-pressed="(true|false)"`, 'g'))];
+    assert.ok(chips.length >= 4, attr);
+    assert.deepEqual(chips.filter((m) => m[2] === 'true').map((m) => m[1]), [first], attr);
+    assert.ok(src.includes(`'${first}'`), first);
   }
+  const X = load('js/basexx-extras.js').BaseXXExtras;
+  const formats = [...html.matchAll(/data-detect-format="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(formats, X.FORMAT_NAMES);
+});
+
+test('入力の上限として書いたバイト数は、計算部の上限と同じ（しくみ12バイト、変種と検査32バイト）', () => {
+  const X = load('js/basexx-extras.js').BaseXXExtras;
+  assert.match(html, new RegExp(`data-i18n="bits.inputLabel" data-i18n-vars="max:${X.EXPLAIN_MAX}"`));
+  assert.match(html, new RegExp(`data-i18n="var.inputLabel" data-i18n-vars="max:${X.DETECT_MAX}"`));
+  assert.deepEqual([X.EXPLAIN_MAX, X.DETECT_MAX], [12, 32]);
 });
 
 // 文言の太字（**）と改行（\n）は HTML の strong と br に当たる。HTML 側のタグを外して比べる
@@ -85,6 +98,7 @@ test('画面のスクリプトが参照する id は、すべて HTML にある�
     if (m[1]) for (const id of m[1].match(/'([a-z0-9-]+)'/g).map((s) => s.slice(1, -1))) assert.ok(ids.has(id), id);
   }
   for (const k of C.KINDS) for (const part of ['out', 'meta', 'copy', 'bar', 'bar-text']) assert.ok(ids.has(`${part}-${k}`), `${part}-${k}`);
+  for (const id of ['otp-input', 'otp-result', 'bits-input', 'bits-bytes', 'var-input', 'detect-input', 'crock-input']) assert.ok(src.includes(`'${id}'`), id);
 });
 
 test('JS は innerHTML・eval を使わず、style を書き換えない。document 全体の keydown を拾わない', () => {

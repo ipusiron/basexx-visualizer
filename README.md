@@ -8,8 +8,8 @@ title: "BaseXX Visualizer"
 subtitle_ja: "Base32/58/64/91比較ツール"
 subtitle_en: "Base32/58/64/91 Encoding Comparison Tool"
 
-description_ja: "Base64を基準に、Base32・Base58・basE91の字母・長さ・読み違いへの強さを比べる学習ツール。4方式の同時エンコード、読める方式をすべて並べるデコード、実際の長さの比較、取り違えのデモを備える。"
-description_en: "A learning tool that compares Base32, Base58 and basE91 with Base64: alphabets, lengths and resistance to misreading. Encodes with four schemes at once, lists every scheme that can decode a string, compares actual lengths and demonstrates character mix-ups."
+description_ja: "Base64を基準に、Base32・Base58・basE91の字母・長さ・読み違いへの強さを比べる学習ツール。4方式の同時エンコード、読める方式をすべて並べるデコード、実際の長さの比較、取り違えのデモに加え、ビットの区切りの説明、変種（Base64url・Base32hex・Crockford Base32）と検査値による誤りの検出、TOTPの鍵の確認を備える。"
+description_en: "A learning tool that compares Base32, Base58 and basE91 with Base64: alphabets, lengths and resistance to misreading. Encodes with four schemes at once, lists every scheme that can decode a string, compares actual lengths and demonstrates character mix-ups. It also explains the bit grouping step by step, covers variants (Base64url, Base32hex, Crockford Base32), tests error detection with check values and inspects TOTP secrets."
 
 category_ja:
   - エンコーディング
@@ -29,6 +29,7 @@ tags:
   - visualization
   - TOTP
   - rfc4648
+  - crockford
 
 repo_url: "https://github.com/ipusiron/basexx-visualizer"
 demo_url: "https://ipusiron.github.io/basexx-visualizer/"
@@ -49,7 +50,7 @@ hub: true
 
 **Day052 - 生成AIで作るセキュリティツール100**
 
-BaseXX Visualizerは、Base64を基準に、Base32・Base58・basE91の字母（使う文字）、長さ、人が読み書きしたときの読み違いへの強さを比べる学習ツールです。4つの方式で同時にエンコードし、文字列を4つの方式で読んだ結果を並べ、形の似た文字を取り違えたときに何が起きるかを確かめられます。
+BaseXX Visualizerは、Base64を基準に、Base32・Base58・basE91の字母（使う文字）、長さ、人が読み書きしたときの読み違いへの強さを比べる学習ツールです。4つの方式で同時にエンコードし、文字列を4つの方式で読んだ結果を並べ、形の似た文字を取り違えたときに何が起きるかを確かめられます。ビットの区切りを1段ずつ見る説明、変種と検査値で誤りに気づけるかの実験、TOTPの鍵の確認もできます。
 
 ---
 
@@ -87,6 +88,14 @@ BaseXX Visualizerは、Base64を基準に、Base32・Base58・basE91の字母（
 >
 >*basE91のしくみと、原作と同じ結果になる例（ダークモード）*
 
+>![「hi!」をBase64にするしくみ](assets/screenshot7.png)
+>
+>*「hi!」の24ビットを6ビットずつ区切ってBase64の文字にする手順*
+
+>![誤りに気づけるかの実験](assets/screenshot8.png)
+>
+>*1文字の置き換えと隣どうしの入れ替えを全部試すと、検査値のある形式だけが誤りに気づける*
+
 ---
 
 ## 🔑 実用的な背景
@@ -114,6 +123,11 @@ BaseXX Visualizerは、Base64を基準に、Base32・Base58・basE91の字母（
 - エンコード：テキスト（UTF-8）か16進の入力を、Base64・Base32・Base58・basE91で同時にエンコードする。文字数と元の何倍かを示し、結果ごとにコピーできる。Base64とBase32の末尾を=で埋めるかを選べる
 - デコード：文字列を4つの方式で読み、読めた方式をすべて並べる（バイト列の16進と、UTF-8の文字列として読めればその文字列）。読めない方式は、誤りの種類と位置（何文字目のどの文字か）を示す。入力欄は書き換えない
 - 空白と改行：デコードで読み飛ばすかを選べる（読み飛ばした数を示す）
+- TOTPの鍵：otpauth://のURIかBase32の鍵を読み、発行者・アカウント名・アルゴリズム・桁数・秒数と、鍵のバイト列と長さを示す。鍵の長さをRFC 4226（128ビット以上が必須、160ビットを推奨）とRFC 6238（HMACの出力と同じ長さを推奨）に照らして注意を出す。ワンタイムパスワードは計算しない
+
+### しくみ
+
+- 12バイトまでのテキストを、Base64・Base32は6・5ビットずつの区切り、Base58は58での割り算の表、basE91は13・14ビットの組と2文字への分け方で、1段ずつ示す
 
 ### 長さと効率
 
@@ -125,6 +139,13 @@ BaseXX Visualizerは、Base64を基準に、Base32・Base58・basE91の字母（
 
 - 5つの取り違え（O→0、I→l、I→1、+→空白、/→\）を選び、Base64の文字列に起こしたときの結果を示す。結果は「元と同じ」「エラーにならず別のデータ」「エラー」の3つに分ける
 - 同じデータをBase32・Base58・basE91で書いていた場合に、同じ取り違えが起きるか、起きたらどうなるかを並べる
+
+### 変種と検査
+
+- 変種で書く：同じテキストを、Base64・Base64url・Base32・Base32hex・Crockford Base32（検査文字なし・あり）・Base58・Base58Checkで並べ、違いを示す
+- 誤りに気づけるか：5つの形式（Base32、Crockford Base32、Crockford Base32＋検査文字、Base58、Base58Check）で、1文字の置き換えと隣どうしの入れ替えをすべて試し、デコードが失敗した数を数える
+- 自分で書き換えて試す：形式を選んで文字列を書き換え、誤りに気づけるか（エラー）、気づけないか（別のデータ）を確かめる
+- Crockford Base32の読み替え：大文字と小文字を区別せず、Oを0、IとLを1と読み、ハイフンを無視して読む。検査文字も確かめる
 
 ### basE91
 
@@ -145,6 +166,9 @@ BaseXX Visualizerは、Base64を基準に、Base32・Base58・basE91の字母（
 2. 下の欄に文字列を入れると、4つの方式で読んだ結果が並びます。どの方式で作られたかは、文字列だけでは決められません。読めた結果の中身から判断します。
 3. 「長さと効率」タブで、データの長さと中身を変えて、方式ごとの文字数の違いを確かめます。
 4. 「読み違い」タブで取り違えを選び、エラーになるか、黙って別のデータになるかを確かめます。「空白と改行を読み飛ばす」を外すと、+→空白の結果が変わります。
+5. 「しくみ」タブで方式を選ぶと、元のバイト列から文字ができるまでの計算が表で並びます。
+6. 「変種と検査」タブで、検査値のある形式とない形式とで、誤りに気づける数がどう違うかを確かめます。下の欄で文字列を書き換えて、自分でも試せます。
+7. 「変換」タブのいちばん下にotpauth://のURIかBase32の鍵を入れると、鍵のバイト列と長さを確かめられます。
 
 ---
 
@@ -206,6 +230,41 @@ Base64とBase32はRFC 4648の試験値（foobar）、Base58はdraft-msporny-base
 
 URLのクエリ文字列をapplication/x-www-form-urlencodedとして読むと、+は空白になります（WHATWG URL Standard）。RFC 4648には、+と/を-と_に替えたURL用のBase64（base64url）があります。
 
+### 変種
+
+「hello」を書いた結果です（テストが計算し直しています）。
+
+| 方式 | helloを書いた結果 | 違い |
+|---|---|---|
+| Base64 | `aGVsbG8=` | 標準 |
+| Base64url | `aGVsbG8` | +と/を-と_に替え、=を付けない（RFC 4648 §5） |
+| Base32 | `NBSWY3DP` | 標準 |
+| Base32hex | `D1IMOR3F` | 0〜9とA〜V。文字列の順が元のバイト列の大小の順と同じになる（RFC 4648 §7） |
+| Crockford Base32 | `D1JPRV3F` | I・L・O・Uを除く |
+| Crockford Base32＋検査文字 | `D1JPRV3FJ` | 数を37で割った余りの検査文字を最後に付ける |
+| Base58 | `Cn8eVZg` | Bitcoinの字母 |
+| Base58Check | `2L5B5yqsVG8Vt` | SHA-256を2回かけた先頭4バイトを後ろに付けてから書く |
+
+Crockford Base32は数の表記なので、ビットが5の倍数に足りないときは上位に0を足します（RFC 4648のBase32は下位に足す）。そのため1バイトの「f」は、Base32では`MY======`、Crockford Base32では`36`になります。読むときは大文字と小文字を区別せず、Oを0、IとLを1と読み、ハイフンを無視します。
+
+### 誤りの検出の実験
+
+「hello」を5つの形式で書き、1文字をその位置に来うるほかの文字に置き換えたもの、違う文字が隣り合う所を入れ替えたものを、すべてデコードした結果です。デコードが失敗した数を「気づけた数」としています。
+
+| 形式 | 文字列 | 1文字の置き換え | 隣どうしの入れ替え |
+|---|---|---|---|
+| Base32 | `NBSWY3DP` | 248通り中0通り | 7通り中0通り |
+| Crockford Base32 | `D1JPRV3F` | 248通り中0通り | 7通り中0通り |
+| Crockford Base32＋検査文字 | `D1JPRV3FJ` | 284通り中284通り | 8通り中8通り |
+| Base58 | `Cn8eVZg` | 399通り中0通り | 6通り中0通り |
+| Base58Check | `2L5B5yqsVG8Vt` | 741通り中741通り | 12通り中12通り |
+
+検査のない形式では、字母のほかの文字に置き換えても読めてしまい、エラーになりません。Crockfordの検査文字は数を37で割った余りで、37は32より大きい素数なので、1文字の置き換えと隣どうしの入れ替えは必ず余りが変わります。Base58Checkは、Bitcoinの`EncodeBase58Check`と同じく、SHA-256を2回かけた先頭4バイトを後ろに付けます。バージョンの00と公開鍵のハッシュ`62E907B15CBF27D5425399EBF6F0FB50EBB88F18`をBase58Checkで書くと、Bitcoinのgenesisブロックのアドレス`1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa`になります。
+
+### TOTPの鍵
+
+Key Uri Formatの例の鍵`JBSWY3DPEHPK3PXP`は「Hello!」とDE AD BE EFの10バイト（80ビット）です。RFC 4226は鍵を128ビット以上とすることを必須とし、160ビットを推奨しているので、このツールは短いと注意を出します。同じ文書のもう1つの例`HXDMVJECJJWSRB3HWIZR4IFUGFTMXBOZ`は20バイト（160ビット）で、SHA1の出力と同じ長さです。
+
 ---
 
 ## 🎯 ユースケース
@@ -220,6 +279,9 @@ URLのクエリ文字列をapplication/x-www-form-urlencodedとして読むと�
 - 趣味・創作：謎解きやゲームの問題作りで、Base64（=で終わることが多い、大文字と小文字が混じる）とBase32（大文字と2〜7だけ）の見た目の違いを手がかりに使う
 - 研究・調べもの：basE91のように知名度の低い方式の効率を、00ばかりのデータと乱数のデータで比べる
 - 資料づくり：技術記事や社内資料で、Base64の文字数が約1.33倍になることを、棒グラフのスクリーンショットで示す
+- 番号やコードの設計：会員番号やクーポンコードのように人が打ち込む文字列に検査文字を付けるかを、誤りの検出の実験（検査なしは0%、ありは100%）を見て決める
+- 二要素認証の点検：自分のサービスが発行するTOTPの鍵の長さが、RFC 4226の128ビット以上を満たしているかを、otpauth://のURIを入れて確かめる（本物の鍵の扱いは「注意と限界」を参照）
+- 算数・数学の授業：「しくみ」タブのBase58の割り算の表を、n進数に直す計算の練習に使う。余りを下から読む手順がそのまま見える
 
 ---
 
@@ -230,7 +292,8 @@ URLのクエリ文字列をapplication/x-www-form-urlencodedとして読むと�
 - 画面の組み立てはDOM（`textContent`）で行い、`innerHTML`を使わない
 - `<meta name="referrer" content="no-referrer">`、外部リンクは`rel="noopener noreferrer"`
 - ブラウザーに保存するのは、言語とテーマの選択だけ（保存できない環境でも動く）
-- 外部のライブラリーやCDNを使わない
+- 外部のライブラリーやCDNを使わない（SHA-256も自前の実装で、テストでNode.jsの`crypto`と突き合わせている）
+- TOTPの鍵も、ブラウザーの中だけで読み、保存も送信もしない
 
 ---
 
@@ -238,7 +301,11 @@ URLのクエリ文字列をapplication/x-www-form-urlencodedとして読むと�
 
 - エンコードは秘密を守らない。どの方式も、方式が分かれば誰でもデコードできる
 - 入力は4096バイトまで、デコードは8192文字までに限っている
-- base64url・Base32hex・Crockford Base32は読まない。Base58Check（Bitcoinのアドレスの検査用の値）は計算しないので、アドレスの正しさは確かめられない
+- 「しくみ」は12バイトまで、「変種と検査」は32バイトまでのテキストを扱う
+- 「変換」タブのデコードの候補はBase64・Base32・Base58・basE91の4つ。変種（Base64url・Base32hex・Crockford Base32・Base58Check）は「変種と検査」タブで扱う
+- Base58Checkは検査値だけを確かめる。Bitcoinのアドレスとしての種類（先頭のバージョンのバイト）は判定しない
+- 誤りの検出の実験は、1文字の置き換えと隣どうしの入れ替えを1回ずつ試すだけで、2文字以上の誤りは試さない
+- TOTPはワンタイムパスワードを計算しない。鍵を読んで長さを確かめるだけである
 - 「読み違い」の結果は、このツールの復号の扱い（空白と改行の読み飛ばしの設定）での結果である。ほかの実装では、字母にない文字を読み飛ばすなど、結果が変わることがある
 - 本物の鍵やトークンを入れるときは、自分の端末で開き、使い終わったら入力欄を消す
 
@@ -253,7 +320,8 @@ npm test
 - Node.js 22以上の`node --test`で動き、依存パッケージはない（`npm install`は不要）
 - GitHub Actionsで、pushとpull requestのたびに実行する
 - `test/core.test.js`：RFC 4648・draft-msporny-base58-03・原作basE91の既知解答、往復（0〜300バイト）、誤りの種類と位置、空白の扱い、長さの式
-- `test/readme.test.js`：READMEの表（エンコードの例・長さ・読み違い）を計算部で計算し直し、日英のREADMEの見出し・画像・ディレクトリー構造を確かめる
+- `test/extras.test.js`：Base64url・Base32hex（RFC 4648 §10の試験値）、Crockford Base32の既知解答と読み替え、SHA-256（Node.jsの`crypto`と0〜300バイトで一致）、Base58Check（genesisのアドレス）、誤りの検出、しくみの表、Key Uri Formatの例
+- `test/readme.test.js`：READMEの表（エンコードの例・長さ・読み違い・変種・誤りの検出）を計算部で計算し直し、日英のREADMEの見出し・画像・ディレクトリー構造を確かめる
 - `test/html.test.js`・`test/contrast.test.js`・`test/messages.test.js`・`test/i18n.test.js`・`test/format.test.js`：CSP、タブのARIA、辞書と画面の文言、配色のコントラスト（4.5:1・3:1）、書式
 
 ---
@@ -268,6 +336,10 @@ npm test
 - [RFC 5155 DNS Security (DNSSEC) Hashed Authenticated Denial of Existence](https://www.rfc-editor.org/rfc/rfc5155)（NSEC3のBase32hex）
 - [WHATWG URL Standard application/x-www-form-urlencoded](https://url.spec.whatwg.org/#application/x-www-form-urlencoded)
 - [RFC 2045 MIME Part One](https://www.rfc-editor.org/rfc/rfc2045)・[RFC 2397 The "data" URL scheme](https://www.rfc-editor.org/rfc/rfc2397)・[RFC 7468 Textual Encodings of PKIX, PKCS, and CMS Structures](https://www.rfc-editor.org/rfc/rfc7468)
+- [Douglas Crockford, Base 32](https://www.crockford.com/base32.html)
+- [Bitcoin Core src/base58.cpp](https://github.com/bitcoin/bitcoin/blob/master/src/base58.cpp)（`EncodeBase58Check`）
+- [RFC 4226 HOTP: An HMAC-Based One-Time Password Algorithm](https://www.rfc-editor.org/rfc/rfc4226)（R6の鍵の長さ）
+- [RFC 6238 TOTP: Time-Based One-Time Password Algorithm](https://www.rfc-editor.org/rfc/rfc6238)（§5.1の鍵の長さ）
 
 ---
 
@@ -280,6 +352,7 @@ basexx-visualizer/
 ├── style.css                 # 配色トークン（ライト・ダーク）とレイアウト
 ├── js/                       # 画面と同じスクリプト（テストからも読む）
 │   ├── basexx-core.js        # 変換の計算部（Base64・Base32・Base58・basE91、DOMなし）
+│   ├── basexx-extras.js      # しくみの説明・変種・誤りの検出・TOTPの鍵の計算部（DOMなし）
 │   ├── messages.js           # 日本語と英語の文言
 │   ├── i18n.js               # 言語の選択と静的な文言の差し替え
 │   ├── theme-init.js         # 描画前に保存したテーマを当てる
@@ -287,6 +360,7 @@ basexx-visualizer/
 ├── test/                     # node:testのテスト
 │   ├── load.js               # js/*.jsをテストに読み込む補助
 │   ├── core.test.js          # 既知解答・往復・誤り・長さ
+│   ├── extras.test.js        # 変種・検出・SHA-256・しくみ・TOTPの鍵
 │   ├── readme.test.js        # READMEの表・見出し・画像・構造
 │   ├── html.test.js          # CSP・ARIA・文言・id
 │   ├── contrast.test.js      # 配色のコントラストと44px・16px
@@ -300,7 +374,9 @@ basexx-visualizer/
 │   ├── screenshot4.png       # 長さの棒グラフ（日本語）
 │   ├── screenshot5.png       # 読み違い（日本語）
 │   ├── screenshot6.png       # basE91（日本語・ダーク）
-│   └── en/                   # 英語の画面のスクリーンショット（同じ6枚）
+│   ├── screenshot7.png       # しくみ（日本語）
+│   ├── screenshot8.png       # 誤りに気づけるか（日本語）
+│   └── en/                   # 英語の画面のスクリーンショット（同じ8枚）
 ├── .github/                  # GitHubの設定
 │   └── workflows/            # GitHub Actionsのワークフロー
 │       └── test.yml          # pushとpull requestでnpm testを実行
