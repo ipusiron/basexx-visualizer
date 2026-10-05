@@ -241,6 +241,7 @@ basexx-visualizer/
 ├── style.css                 # Color tokens (light and dark) and layout
 ├── js/                       # Scripts shared by the page and the tests
 │   ├── basexx-core.js        # Core conversions (Base64, Base32, Base58, basE91; no DOM)
+│   ├── basexx-extras.js      # How it works, variants, error detection, TOTP keys (no DOM)
 │   ├── messages.js           # Japanese and English text
 │   ├── i18n.js               # Language selection and static text replacement
 │   ├── theme-init.js         # Applies the saved theme before rendering
@@ -248,6 +249,7 @@ basexx-visualizer/
 ├── test/                     # Tests with node:test
 │   ├── load.js               # Helper that loads js/*.js into the tests
 │   ├── core.test.js          # Known answers, round trips, errors, lengths
+│   ├── extras.test.js        # Variants, detection, SHA-256, how it works, TOTP keys
 │   ├── readme.test.js        # README tables, headings, images, structure
 │   ├── html.test.js          # CSP, ARIA, text, ids
 │   ├── contrast.test.js      # Color contrast, 44px and 16px

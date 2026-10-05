@@ -280,6 +280,7 @@ basexx-visualizer/
 ├── style.css                 # 配色トークン（ライト・ダーク）とレイアウト
 ├── js/                       # 画面と同じスクリプト（テストからも読む）
 │   ├── basexx-core.js        # 変換の計算部（Base64・Base32・Base58・basE91、DOMなし）
+│   ├── basexx-extras.js      # しくみの説明・変種・誤りの検出・TOTPの鍵の計算部（DOMなし）
 │   ├── messages.js           # 日本語と英語の文言
 │   ├── i18n.js               # 言語の選択と静的な文言の差し替え
 │   ├── theme-init.js         # 描画前に保存したテーマを当てる
@@ -287,6 +288,7 @@ basexx-visualizer/
 ├── test/                     # node:testのテスト
 │   ├── load.js               # js/*.jsをテストに読み込む補助
 │   ├── core.test.js          # 既知解答・往復・誤り・長さ
+│   ├── extras.test.js        # 変種・検出・SHA-256・しくみ・TOTPの鍵
 │   ├── readme.test.js        # READMEの表・見出し・画像・構造
 │   ├── html.test.js          # CSP・ARIA・文言・id
 │   ├── contrast.test.js      # 配色のコントラストと44px・16px
