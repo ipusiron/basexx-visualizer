@@ -23,7 +23,7 @@ test('主要なファイルは1行に詰め込まれていない（行数の下�
 });
 
 test('改行は LF、制御文字なし、末尾に改行', () => {
-  for (const f of [...CODE, 'index.html']) {
+  for (const f of [...CODE, 'index.html', 'README.md', 'README.en.md', 'CLAUDE.md']) {
     const s = read(f);
     assert.ok(!s.includes('\r'), `${f}: CR`);
     assert.ok(![...s].some((ch) => { const c = ch.codePointAt(0); return (c < 32 && c !== 10) || c === 127; }), f);
