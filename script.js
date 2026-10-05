@@ -1,522 +1,332 @@
-/* BaseXX Visualizer - 初期版スクリプト
- * 目的：タブ切替、UIひな形、ダミーの計算/表示
- * NOTE: エンコード/デコード実装は後続コミットで追加
- */
+// BaseXX Visualizer - 画面の処理（DOM）。計算は js/basexx-core.js、文言は js/messages.js に置く
+// 各部分は状態を持ち、render() で状態から画面を描き直す（言語を切り替えたときも同じ関数で描き直す）
+(() => {
+  'use strict';
 
-// --- エンコード実装 ---
-// Base64 は標準 API で実装
-function encodeBase64(bytes, withPadding = true) {
-  let bin = String.fromCharCode(...bytes);
-  let b64 = btoa(bin);
-  if (!withPadding) {
-    b64 = b64.replace(/=+$/, '');
-  }
-  return b64;
-}
-function decodeBase64(str) {
-  try {
-    let bin = atob(str);
-    return new Uint8Array([...bin].map(c => c.charCodeAt(0)));
-  } catch {
-    return null;
-  }
-}
+  const C = globalThis.BaseXXCore;
+  const I18n = globalThis.BaseXXI18n;
+  const Theme = globalThis.BaseXXTheme;
+  const t = (key, vars) => globalThis.BaseXXMessages.t(key, vars);
+  const $ = (id) => document.getElementById(id);
+  const renders = [];
+  const NAMES = { base64: 'Base64', base32: 'Base32', base58: 'Base58', base91: 'basE91' };
 
-// Base32 (RFC4648)
-const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-function encodeBase32(bytes, withPadding = true) {
-  let bits = 0, value = 0, output = '';
-  for (let i = 0; i < bytes.length; i++) {
-    value = (value << 8) | bytes[i];
-    bits += 8;
-    while (bits >= 5) {
-      output += base32Alphabet[(value >>> (bits - 5)) & 31];
-      bits -= 5;
+  function el(tag, className, text) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  // 元のバイト数に対する倍率（小数2桁）
+  const ratioText = (len, n) => (len / n).toFixed(2);
+
+  // 見えない文字を言葉にする（エラーの位置の表示用）
+  function visible(ch) {
+    if (ch === ' ') return t('char.space');
+    if (ch === '\n' || ch === '\r') return t('char.newline');
+    if (ch === '\t') return t('char.tab');
+    return ch === undefined ? '' : ch;
+  }
+
+  // デコードの誤り（char・length・padding・empty・long）を文にする
+  const reason = (r) => t(`dec.err.${r.error}`, { pos: r.pos, ch: visible(r.ch) });
+
+  // バイト列を、UTF-8 の文字列として読めればその文字列、読めなければ16進で見せる
+  const shown = (bytes) => {
+    const s = C.readUtf8(bytes);
+    return s === null ? C.toHex(bytes) : s;
+  };
+
+  // ===== タブ（矢印キー・Home・End で移動、選んだタブだけ tabindex=0） =====
+  const tabs = [...document.querySelectorAll('.tab-btn')];
+
+  function selectTab(tab, focus) {
+    for (const b of tabs) {
+      const on = b === tab;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      $(b.getAttribute('aria-controls')).hidden = !on;
     }
+    if (focus) tab.focus();
   }
-  if (bits > 0) {
-    output += base32Alphabet[(value << (5 - bits)) & 31];
-  }
-  if (withPadding) {
-    while (output.length % 8 !== 0) output += '=';
-  }
-  return output;
-}
-function decodeBase32(str) {
-  str = str.replace(/=+$/, '').toUpperCase();
-  let bits = 0, value = 0, output = [];
-  for (let c of str) {
-    let idx = base32Alphabet.indexOf(c);
-    if (idx === -1) return null;
-    value = (value << 5) | idx;
-    bits += 5;
-    if (bits >= 8) {
-      output.push((value >>> (bits - 8)) & 0xFF);
-      bits -= 8;
-    }
-  }
-  return new Uint8Array(output);
-}
 
-// Base58 (Bitcoin)
-const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function encodeBase58(bytes) {
-  let intVal = BigInt('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join(''));
-  if (intVal === 0n) return "1";
-  let result = '';
-  while (intVal > 0) {
-    let div = intVal / 58n;
-    let rem = Number(intVal % 58n);
-    result = base58Alphabet[rem] + result;
-    intVal = div;
-  }
-  // leading zeros
-  for (let b of bytes) {
-    if (b === 0) result = '1' + result;
-    else break;
-  }
-  return result;
-}
-function decodeBase58(str) {
-  let intVal = 0n;
-  for (let c of str) {
-    let idx = base58Alphabet.indexOf(c);
-    if (idx === -1) return null;
-    intVal = intVal * 58n + BigInt(idx);
-  }
-  let hex = intVal.toString(16);
-  if (hex.length % 2) hex = '0' + hex;
-  let bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substring(i*2, i*2+2), 16);
-  }
-  // leading zeros
-  let leadingZeros = 0;
-  for (let c of str) {
-    if (c === '1') leadingZeros++;
-    else break;
-  }
-  if (leadingZeros > 0) {
-    bytes = new Uint8Array([...Array(leadingZeros).fill(0), ...bytes]);
-  }
-  return bytes;
-}
-
-// Base91 (Joe's original impl, simplified)
-const base91Alphabet = (() => {
-  let chars = [];
-  for (let i = 33; i <= 126; i++) chars.push(String.fromCharCode(i));
-  return chars.join('');
-})();
-const base91Table = Object.fromEntries([...base91Alphabet].map((c,i)=>[c,i]));
-function encodeBase91(bytes) {
-  let b = 0, n = 0, out = '';
-  for (let i=0;i<bytes.length;i++){
-    b |= bytes[i] << n;
-    n += 8;
-    if(n>13){
-      let v = b & 8191;
-      if(v>88){
-        b >>= 13; n -= 13;
-      }else{
-        v = b & 16383;
-        b >>= 14; n -= 14;
-      }
-      out += base91Alphabet[v % 91] + base91Alphabet[Math.floor(v/91)];
-    }
-  }
-  if(n){
-    out += base91Alphabet[b % 91];
-    if(n>7 || b>90) out += base91Alphabet[Math.floor(b/91)];
-  }
-  return out;
-}
-function decodeBase91(str) {
-  let v=-1, b=0, n=0, out=[];
-  for (let c of str){
-    if(!(c in base91Table)) return null;
-    if(v<0) v=base91Table[c];
-    else{
-      v+=base91Table[c]*91;
-      b |= v << n;
-      n += (v&8191)>88 ? 13:14;
-      do{
-        out.push(b & 255);
-        b >>= 8;
-        n -= 8;
-      }while(n>7);
-      v=-1;
-    }
-  }
-  if(v+1){
-    out.push((b | v<<n)&255);
-  }
-  return new Uint8Array(out);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  // --- Tabs ---
-  const tabButtons = document.querySelectorAll('.tab-button');
-  const panels = document.querySelectorAll('.tab-panel');
-
-  tabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const to = btn.dataset.tab;
-      tabButtons.forEach(b => b.classList.toggle('active', b === btn));
-      panels.forEach(p => p.classList.toggle('active', p.id === `panel-${to}`));
+  tabs.forEach((b, i) => {
+    b.addEventListener('click', () => selectTab(b, false));
+    b.addEventListener('keydown', (e) => {
+      const target = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (target === undefined) return;
+      e.preventDefault();
+      selectTab(tabs[(target + tabs.length) % tabs.length], true);
     });
   });
 
-  // --- Overview: alphabets ---
-  const alphabets = {
-    base64: 'A–Z a–z 0–9 + / （URL-safe では - _）',
-    base32: 'A–Z 2–7（計32文字、可読性重視・大文字のみ）',
-    base58: 'Base64 から 0 O I l + / を除いた58文字（誤読低減）',
-    base91: '印字可能ASCIIの広範囲（91文字、特殊記号多め）'
-  };
-  const alphabetBox = document.getElementById('alphabetBox');
-  const chipButtons = document.querySelectorAll('.chip-select');
-  const setAlphabet = key => {
-    alphabetBox.textContent = alphabets[key] || '';
-    chipButtons.forEach(c => c.classList.toggle('active', c.dataset.alphabet === key));
-  };
-  chipButtons.forEach(c => c.addEventListener('click', () => setAlphabet(c.dataset.alphabet)));
-  setAlphabet('base64');
+  // ===== 基本: 字母の早見 =====
+  const alphabet = { kind: 'base64' };
+  const kindChips = [...document.querySelectorAll('.chip[data-kind]')];
 
-  // --- Playground ---
-  const inputArea = document.getElementById('inputArea');
-  const inputError = document.getElementById('inputError');
-  const modeHex = document.getElementById('modeHex');
-  const togglePadding = document.getElementById('togglePadding');
+  function renderAlphabet() {
+    const k = alphabet.kind;
+    for (const c of kindChips) c.setAttribute('aria-pressed', c.dataset.kind === k ? 'true' : 'false');
+    $('alphabet-summary').textContent = t(`alphabet.${k}`);
+    const marks = C.confusablesIn(k);
+    const grid = $('alphabet-grid');
+    grid.setAttribute('aria-label', t('alphabet.gridLabel', { name: NAMES[k] }));
+    grid.replaceChildren(...[...C.ALPHABETS[k]].map((ch, i) => {
+      const cell = el('div', marks.includes(ch) ? 'glyph confusable' : 'glyph');
+      cell.setAttribute('role', 'listitem');
+      cell.append(el('span', 'glyph-char', ch), el('span', 'glyph-index', String(i)));
+      return cell;
+    }));
+    $('alphabet-pairs').textContent = marks.length ? t('alphabet.pairs', { list: marks.join(' ') }) : t('alphabet.noPairs');
+  }
 
-  const btnDemoHello = document.getElementById('btnDemoHello');
-  const btnDemoJP = document.getElementById('btnDemoJP');
-  const btnDemoHex = document.getElementById('btnDemoHex');
-  const btnEncode = document.getElementById('btnEncode');
-  const btnDecode = document.getElementById('btnDecode');
-
-  const out = {
-    '64': { text: document.getElementById('out64'), len: document.getElementById('len64'), rate: document.getElementById('rate64') },
-    '32': { text: document.getElementById('out32'), len: document.getElementById('len32'), rate: document.getElementById('rate32') },
-    '58': { text: document.getElementById('out58'), len: document.getElementById('len58'), rate: document.getElementById('rate58') },
-    '91': { text: document.getElementById('out91'), len: document.getElementById('len91'), rate: document.getElementById('rate91') }
-  };
-
-  // デモセット
-  btnDemoHello.addEventListener('click', () => {
-    modeHex.checked = false;
-    inputArea.value = 'hello';
-    inputArea.focus();
-  });
-  btnDemoJP.addEventListener('click', () => {
-    modeHex.checked = false;
-    inputArea.value = 'こんにちは';
-    inputArea.focus();
-  });
-  btnDemoHex.addEventListener('click', () => {
-    modeHex.checked = true;
-    inputArea.value = 'DE AD BE EF';
-    inputArea.focus();
-  });
-
-  // コピー（セキュリティ強化）
-  document.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.copyTarget;
-      const node = document.getElementById(id);
-      if (!node) return;
-      
-      // コピーするテキストのサニタイズ
-      const textToCopy = node.textContent.trim();
-      if (textToCopy.length === 0) {
-        return;
-      }
-      
-      // コピーサイズ制限
-      if (textToCopy.length > 100000) {
-        alert('コピーするデータが大きすぎます');
-        return;
-      }
-      
-      try {
-        await navigator.clipboard.writeText(textToCopy);
-        const originalText = btn.textContent;
-        btn.textContent = 'コピー済';
-        btn.disabled = true;
-        setTimeout(() => {
-          btn.textContent = originalText;
-          btn.disabled = false;
-        }, 900);
-      } catch (err) {
-        console.error('Copy failed:', err);
-        alert('コピーに失敗しました');
-      }
+  for (const c of kindChips) {
+    c.addEventListener('click', () => {
+      alphabet.kind = c.dataset.kind;
+      renderAlphabet();
     });
-  });
+  }
+  renders.push(renderAlphabet);
 
-  // HEXバリデーション（セキュリティ強化）
-  const parseHex = (hexStr) => {
-    // 入力長制限
-    if (hexStr.length > 10000) {
-      console.warn('Input too long');
-      return null;
-    }
-    
-    // ホワイトスペースと区切り文字を許可しつつ、不正文字を除去
-    const clean = hexStr.replace(/[^0-9a-fA-F]/g, '');
-    if (clean.length === 0 || clean.length % 2 !== 0) return null;
-    
-    // バイト数制限
-    if (clean.length / 2 > 5000) {
-      console.warn('Output size too large');
-      return null;
-    }
-    
-    const bytes = new Uint8Array(clean.length / 2);
-    for (let i = 0; i < clean.length; i += 2) {
-      bytes[i/2] = parseInt(clean.slice(i, i+2), 16);
-    }
-    return bytes;
-  };
+  // ===== 変換: エンコード（4つの方式を並べる） =====
+  const encInput = $('enc-input');
+  const encText = {};
 
-  // ダミー実装は削除（実際のエンコード関数を使用）
-
-  const getInputBytes = () => {
-    inputError.hidden = true;
-    
-    // 入力長制限
-    if (inputArea.value.length > 10000) {
-      inputError.hidden = false;
-      inputError.textContent = '入力が長すぎます（10000文字以内）';
-      return null;
-    }
-    
-    if (modeHex.checked) {
-      const bytes = parseHex(inputArea.value);
-      if (!bytes) {
-        inputError.hidden = false;
-        inputError.textContent = 'HEX入力が無効です（偶数桁の16進で入力してください）';
-        return null;
-      }
-      return bytes;
+  // 入力を読んでバイト列にする。読めなければ文言を返す
+  function readEncInput() {
+    let bytes;
+    if ($('enc-mode-hex').checked) {
+      const r = C.parseHex(encInput.value);
+      if (!r.ok) return { ok: false, message: t(`enc.err.${r.error}`, { pos: r.pos, ch: visible(r.ch) }) };
+      bytes = r.bytes;
     } else {
-      const encoded = new TextEncoder().encode(inputArea.value);
-      // エンコード後のサイズ制限
-      if (encoded.length > 5000) {
-        inputError.hidden = false;
-        inputError.textContent = '入力データが大きすぎます';
-        return null;
-      }
-      return encoded;
+      bytes = C.utf8(encInput.value);
     }
-  };
+    if (bytes.length > C.MAX_BYTES) return { ok: false, message: t('enc.err.long', { max: C.MAX_BYTES, n: bytes.length }) };
+    return { ok: true, bytes };
+  }
 
-
-  // --- Efficiency: relative bars (Base64=100%) ---
-  const sizeSlider = document.getElementById('sizeSlider');
-  const sizeValue = document.getElementById('sizeValue');
-
-  const barMap = {
-    '64': { el: document.getElementById('bar64'), text: document.getElementById('bar64Text') },
-    '32': { el: document.getElementById('bar32'), text: document.getElementById('bar32Text') },
-    '58': { el: document.getElementById('bar58'), text: document.getElementById('bar58Text') },
-    '91': { el: document.getElementById('bar91'), text: document.getElementById('bar91Text') }
-  };
-
-  const estimateEncodedLen = (rawLen) => {
-    // 端数やパディングは無視した簡易推定（初期版）
-    const base64 = Math.ceil(rawLen * 4 / 3);
-    const base32 = Math.ceil(rawLen * 8 / 5);
-    const base58 = Math.ceil(rawLen * 4 / 3); // 近似
-    const base91 = Math.ceil(rawLen * 1.23);  // 近似
-    return { base64, base32, base58, base91 };
-    // TODO: 後続で端数/パディングを考慮して厳密化
-  };
-
-  const renderBars = () => {
-    const raw = Number(sizeSlider.value);
-    sizeValue.textContent = raw;
-
-    const { base64, base32, base58, base91 } = estimateEncodedLen(raw);
-    const toPercent = (v) => Math.max(2, Math.min(100, Math.round(v / base64 * 100)));
-
-    const set = (k, len) => {
-      barMap[k].el.style.width = toPercent(len) + '%';
-      barMap[k].text.textContent = `${len} chars  /  ${Math.round(len/raw*100)}%`;
-    };
-
-    set('64', base64);
-    set('32', base32);
-    set('58', base58);
-    set('91', base91);
-  };
-
-  sizeSlider.addEventListener('input', renderBars);
-  renderBars();
-
-  // --- Errors demo: pattern-based comparison ---
-  const patternData = {
-    'O0': {
-      title: 'O ↔ 0 の混同パターン',
-      description: 'Base64文字列に含まれるオー（O）が、手入力時にゼロ（0）と誤読される例です。',
-      original: 'OGVsbG8gV29ybGQ=', // "8ello World" contains 'O'
-      apply: (str) => str.replaceAll('O', '0')
-    },
-    'Il': {
-      title: 'I ↔ l の混同パターン',
-      description: 'Base64文字列に含まれるアイ大文字（I）が、手入力時にエル小文字（l）と誤読される例です。',
-      original: 'U2FtcGxlIFRleHQ=', // "Sample Text" contains 'I'
-      apply: (str) => str.replaceAll('I', 'l')
-    },
-    'I1': {
-      title: 'I ↔ 1 の混同パターン',
-      description: 'JWTトークンなどでよく見られる、Base64文字列に含まれるアイ大文字（I）が手入力時にイチ（1）と誤読される例です。',
-      original: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9', // JWT header: {"alg":"HS256","typ":"JWT"}
-      apply: (str) => str.replaceAll('I', '1')
-    },
-    'plus': {
-      title: '+ ↔ スペース の混同パターン',
-      description: 'Base64文字列に含まれるプラス（+）が、手入力時にスペースと誤読される例です。',
-      original: 'aGVsbG8+d29ybGQ+dGVzdA==', // "hello>world>test" contains '+' 
-      apply: (str) => str.replaceAll('+', ' ')
-    },
-    'slash': {
-      title: '/ ↔ \\ の混同パターン',
-      description: 'Base64文字列に含まれるスラッシュ（/）が、手入力時にバックスラッシュと誤読される例です。',
-      original: 'SGVsbG8/V29ybGQ=', // "Hello?World" contains '/'
-      apply: (str) => str.replaceAll('/', '\\\\')
+  function renderEncode() {
+    const r = readEncInput();
+    const status = $('enc-status');
+    status.classList.toggle('error', !r.ok);
+    status.textContent = r.ok ? t('enc.bytes', { n: r.bytes.length }) : r.message;
+    const pad = $('enc-pad').checked;
+    for (const k of C.KINDS) {
+      const text = r.ok ? C.encode(k, r.bytes, pad) : '';
+      encText[k] = text;
+      $(`out-${k}`).textContent = text || (r.ok ? t('enc.empty') : '');
+      let meta = '';
+      if (r.ok) meta = r.bytes.length ? t('enc.meta', { len: text.length, ratio: ratioText(text.length, r.bytes.length) }) : t('enc.metaEmpty');
+      $(`meta-${k}`).textContent = meta;
+      const copy = $(`copy-${k}`);
+      copy.disabled = !text;
+      copy.setAttribute('aria-label', t('enc.copyLabel', { name: NAMES[k] }));
     }
-  };
+  }
 
-  const patternButtons = document.querySelectorAll('.pattern-btn');
-  const demoResults = document.getElementById('demoResults');
-  
-  // 文字をハイライト表示する関数
-  const highlightCharacters = (text, targetChar, replacementChar, isOriginal = true) => {
-    const className = isOriginal ? 'char-original' : 'char-corrupted';
-    const charToHighlight = isOriginal ? targetChar : replacementChar;
-    
-    return text.split('').map(char => {
-      if (char === charToHighlight) {
-        // スペースの場合は視覚化
-        const displayChar = char === ' ' ? '␣' : char;
-        return `<span class="char-highlight ${className}">${displayChar}</span>`;
-      }
-      return char;
-    }).join('');
-  };
-  
-  // パターンごとの文字マッピング
-  const charMappings = {
-    'O0': { original: 'O', replacement: '0' },
-    'Il': { original: 'I', replacement: 'l' },
-    'I1': { original: 'I', replacement: '1' },
-    'plus': { original: '+', replacement: ' ' },
-    'slash': { original: '/', replacement: '\\' }
-  };
-  
-  patternButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const pattern = btn.getAttribute('data-pattern');
-      const data = patternData[pattern];
-      const mapping = charMappings[pattern];
-      
-      if (!data || !mapping) return;
-      
-      // ボタンのアクティブ状態更新
-      patternButtons.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      
-      // 結果エリアを表示
-      demoResults.style.display = 'block';
-      
-      // パターン情報更新
-      document.getElementById('currentPattern').textContent = data.title;
-      document.getElementById('patternDescription').textContent = data.description;
-      
-      // レジェンドを更新
-      const legend = document.querySelector('.highlight-legend');
-      const originalChar = mapping.original === ' ' ? '␣' : mapping.original;
-      const replacementChar = mapping.replacement === ' ' ? '␣' : mapping.replacement;
-      legend.innerHTML = `
-        <div class="legend-item">
-          <span class="char-highlight char-original">${originalChar}</span> 元の文字（正しい）
-        </div>
-        <div class="legend-item">
-          <span class="char-highlight char-corrupted">${replacementChar}</span> 誤読された文字（問題）
-        </div>
-      `;
-      
-      // 元のBase64の表示とデコード（ハイライト付き）
-      const originalHighlighted = highlightCharacters(data.original, mapping.original, mapping.replacement, true);
-      document.getElementById('originalB64').innerHTML = originalHighlighted;
-      
+  // 例のボタンは、ボタンの文字そのものを入れる（16進の例は入力の種類も切り替える）
+  const HEX_SAMPLES = ['deadbeef', 'zeros'];
+  for (const b of document.querySelectorAll('[data-enc-sample]')) {
+    b.addEventListener('click', () => {
+      const hex = HEX_SAMPLES.includes(b.dataset.encSample);
+      $(hex ? 'enc-mode-hex' : 'enc-mode-text').checked = true;
+      encInput.value = b.textContent;
+      renderEncode();
+    });
+  }
+  for (const id of ['enc-input', 'enc-mode-text', 'enc-mode-hex', 'enc-pad']) $(id).addEventListener('input', renderEncode);
+
+  for (const b of document.querySelectorAll('[data-copy]')) {
+    b.addEventListener('click', async () => {
+      const k = b.dataset.copy;
       try {
-        const originalDecoded = decodeBase64(data.original);
-        document.getElementById('originalDecoded').textContent = originalDecoded ? 
-          new TextDecoder().decode(originalDecoded) : 'デコードエラー';
+        if (!navigator.clipboard) throw new Error('clipboard');
+        await navigator.clipboard.writeText(encText[k]);
+        $('copy-status').textContent = t('enc.copied', { name: NAMES[k] });
       } catch {
-        document.getElementById('originalDecoded').textContent = 'デコードエラー';
-      }
-      
-      // 誤読を適用
-      const corruptedB64 = data.apply(data.original);
-      
-      // 誤読後のBase64の表示とデコード（ハイライト付き）
-      const corruptedHighlighted = highlightCharacters(corruptedB64, mapping.original, mapping.replacement, false);
-      document.getElementById('corruptedB64').innerHTML = corruptedHighlighted;
-      
-      try {
-        const corruptedDecoded = decodeBase64(corruptedB64);
-        if (corruptedDecoded) {
-          const decodedText = new TextDecoder().decode(corruptedDecoded);
-          document.getElementById('corruptedDecoded').textContent = decodedText;
-          document.getElementById('corruptedDecoded').className = 'result-text decoded';
-        } else {
-          document.getElementById('corruptedDecoded').textContent = 'デコードエラー';
-          document.getElementById('corruptedDecoded').className = 'result-text decoded error-text';
-        }
-      } catch {
-        document.getElementById('corruptedDecoded').textContent = 'デコードエラー';
-        document.getElementById('corruptedDecoded').className = 'result-text decoded error-text';
+        $('copy-status').textContent = t('enc.copyFailed');
       }
     });
-  });
+  }
+  renders.push(renderEncode);
 
-  // --- UIボタンに組み込み ---
-  btnEncode.addEventListener('click', () => {
-    const bytes = getInputBytes();
-    if (!bytes) return;
+  // ===== 変換: デコード（読める方式をすべて並べる。入力欄は書き換えない） =====
+  function candidate(r) {
+    const card = el('article', `cand ${r.kind}`);
+    const head = el('h4');
+    head.append(el('span', '', NAMES[r.kind]), el('span', r.ok ? 'pill ok' : 'pill ng', t(r.ok ? 'dec.ok' : 'dec.ng')));
+    card.append(head);
+    if (!r.ok) {
+      card.append(el('p', 'reason', reason(r)));
+      return card;
+    }
+    const s = C.readUtf8(r.bytes);
+    const dl = el('dl');
+    dl.append(el('dt', '', t('dec.hex', { n: r.bytes.length })), el('dd', 'mono', C.toHex(r.bytes)));
+    dl.append(el('dt', '', t('dec.text')), s === null ? el('dd', '', t('dec.notText')) : el('dd', 'mono pre', s));
+    card.append(dl);
+    if (r.skipped) card.append(el('p', 'extra', t('dec.skipped', { n: r.skipped })));
+    if (r.loose) card.append(el('p', 'extra', t('dec.loose')));
+    return card;
+  }
 
-    const withPadding = togglePadding.checked;
-
-    const out64 = encodeBase64(bytes, withPadding);
-    const out32 = encodeBase32(bytes, withPadding);
-    const out58 = encodeBase58(bytes);
-    const out91 = encodeBase91(bytes);
-
-    const outputs = { '64': out64, '32': out32, '58': out58, '91': out91 };
-    Object.entries(outputs).forEach(([k, text]) => {
-      out[k].text.textContent = text;
-      out[k].len.textContent = `長さ: ${text.length}`;
-      out[k].rate.textContent = `膨張率: ${Math.round(text.length/bytes.length*100)}%`;
-    });
-  });
-
-  btnDecode.addEventListener('click', () => {
-    const str = inputArea.value.trim();
-    if (!str) return;
-    let dec = null;
-    if (/^[A-Za-z0-9+/=]+$/.test(str)) dec = decodeBase64(str);
-    if (!dec && /^[A-Z2-7]+=*$/.test(str)) dec = decodeBase32(str);
-    if (!dec && /^[1-9A-HJ-NP-Za-km-z]+$/.test(str)) dec = decodeBase58(str);
-    if (!dec) dec = decodeBase91(str);
-
-    if (!dec) {
-      inputError.hidden = false;
-      inputError.textContent = 'デコード失敗しました';
+  function renderDecode() {
+    const text = $('dec-input').value;
+    const status = $('dec-status');
+    if (!text.trim()) {
+      status.textContent = t('dec.prompt');
+      $('dec-results').replaceChildren();
       return;
     }
-    inputArea.value = new TextDecoder().decode(dec);
+    const results = C.decodeAll(text, { skipSpace: $('dec-skip').checked });
+    const n = results.filter((r) => r.ok).length;
+    status.textContent = n ? t('dec.summary', { n }) : t('dec.none');
+    $('dec-results').replaceChildren(...results.map(candidate));
+  }
+
+  for (const b of document.querySelectorAll('[data-dec-sample]')) {
+    b.addEventListener('click', () => {
+      $('dec-input').value = b.dataset.decSample;
+      renderDecode();
+    });
+  }
+  for (const id of ['dec-input', 'dec-skip']) $(id).addEventListener('input', renderDecode);
+  renders.push(renderDecode);
+
+  // ===== 長さと効率（選んだデータを実際にエンコードして、いちばん長い方式を100%で描く） =====
+  function renderLength() {
+    const n = Number($('len-size').value);
+    $('len-size-out').textContent = String(n);
+    const kind = document.querySelector('input[name="len-data"]:checked').value;
+    const data = C.sampleBytes(kind, n);
+    const lens = C.lengths(data, $('len-pad').checked);
+    const max = Math.max(...Object.values(lens));
+    for (const k of C.KINDS) {
+      $(`bar-${k}`).setAttribute('width', String((lens[k] / max) * 100));
+      $(`bar-text-${k}`).textContent = t('length.bar', { len: lens[k], ratio: ratioText(lens[k], n) });
+    }
+    const s = C.base91Steps(data);
+    const lines = [t('length.b91', { a: s.pairs13, b: s.pairs14, c: s.tail })];
+    if (kind === 'zero') lines.push(t('length.b58zero'));
+    $('len-detail').textContent = lines.join(I18n.lang === 'ja' ? '' : ' ');
+  }
+
+  for (const id of ['len-size', 'len-data-random', 'len-data-zero', 'len-data-ff', 'len-pad']) $(id).addEventListener('input', renderLength);
+  renders.push(renderLength);
+
+  // ===== 読み違い（Base64 の文字を取り違えて読む。ほかの方式でも同じ取り違えを試す） =====
+  const PATTERNS = {
+    O0: { text: '{"alg":"HS256","typ":"JWT"}', from: 'O', to: '0' },
+    Il: { text: 'Sample Text', from: 'I', to: 'l' },
+    I1: { text: '{"alg":"HS256","typ":"JWT"}', from: 'I', to: '1' },
+    plus: { text: 'Hello>', from: '+', to: ' ' },
+    slash: { text: 'Hello?World', from: '/', to: '\\' }
+  };
+  const mis = { pattern: 'O0' };
+  const patternChips = [...document.querySelectorAll('.chip[data-pattern]')];
+
+  // 取り違えた位置に印を付けて、文字列を要素で組み立てる（空白は ␣ で見せる）
+  function marked(text, positions, cls) {
+    const frag = document.createDocumentFragment();
+    [...text].forEach((c, i) => {
+      if (positions.has(i)) frag.append(el('span', cls, c === ' ' ? '␣' : c));
+      else frag.append(c);
+    });
+    return frag;
+  }
+
+  // 取り違えたあとの文字列を読んだ結果を、元と同じ・別のデータ・エラーの3つに分ける
+  function outcome(kind, original, changed, skip) {
+    const r = C.decode(kind, changed, { skipSpace: skip });
+    if (!r.ok) return { cls: 'error', text: t('misread.error'), r };
+    if (C.sameBytes(r.bytes, original)) return { cls: 'ok', text: t('misread.same'), r };
+    return { cls: 'warn', text: t('misread.changed'), r };
+  }
+
+  function renderMisread() {
+    const p = PATTERNS[mis.pattern];
+    for (const c of patternChips) c.setAttribute('aria-pressed', c.dataset.pattern === mis.pattern ? 'true' : 'false');
+    $('mis-desc').textContent = t(`misread.desc.${mis.pattern}`);
+    const skip = $('mis-skip').checked;
+    const bytes = C.utf8(p.text);
+    const before = C.encodeBase64(bytes);
+    const after = before.split(p.from).join(p.to);
+    const positions = new Set([...before].flatMap((c, i) => (c === p.from ? [i] : [])));
+    $('mis-before').replaceChildren(marked(before, positions, 'hl-before'));
+    $('mis-after').replaceChildren(marked(after, positions, 'hl-after'));
+    $('mis-before-result').textContent = t('misread.decoded', { value: shown(bytes) });
+    const o = outcome('base64', bytes, after, skip);
+    $('mis-after-result').textContent = o.r.ok ? t('misread.decoded', { value: shown(o.r.bytes) }) : reason(o.r);
+    const verdict = $('mis-verdict');
+    verdict.className = `verdict ${o.cls}`;
+    verdict.textContent = o.text;
+
+    $('mis-others').replaceChildren(...['base32', 'base58', 'base91'].map((k) => {
+      const s = C.encode(k, bytes);
+      const th = el('th', '', NAMES[k]);
+      th.scope = 'row';
+      const td = el('td');
+      if (!C.ALPHABETS[k].includes(p.from)) {
+        td.textContent = t('misread.notInAlphabet', { ch: visible(p.from) });
+      } else if (!s.includes(p.from)) {
+        td.textContent = t('misread.notInString', { ch: visible(p.from) });
+      } else {
+        const r = outcome(k, bytes, s.split(p.from).join(p.to), skip);
+        td.append(el('span', `outcome ${r.cls}`, r.text), ' ', r.r.ok ? t('misread.decoded', { value: shown(r.r.bytes) }) : reason(r.r));
+      }
+      const tr = el('tr');
+      tr.append(th, el('td', 'mono', s), td);
+      return tr;
+    }));
+  }
+
+  for (const c of patternChips) {
+    c.addEventListener('click', () => {
+      mis.pattern = c.dataset.pattern;
+      renderMisread();
+    });
+  }
+  $('mis-skip').addEventListener('input', renderMisread);
+  renders.push(renderMisread);
+
+  // ===== basE91: 原作と同じ結果になる例 =====
+  const B91_EXAMPLES = [['text', 'test'], ['text', 'hello'], ['hex', 'DE AD BE EF'], ['hex', '00 00 00 00']];
+
+  function renderBase91() {
+    $('b91-examples').replaceChildren(...B91_EXAMPLES.map(([mode, value]) => {
+      const bytes = mode === 'hex' ? C.parseHex(value).bytes : C.utf8(value);
+      const s = C.base91Steps(bytes);
+      const tr = el('tr');
+      tr.append(el('td', 'mono', mode === 'hex' ? value : `"${value}"`), el('td', 'mono', s.text),
+        el('td', '', t('b91.steps', { a: s.pairs13, b: s.pairs14, c: s.tail })));
+      return tr;
+    }));
+  }
+  renders.push(renderBase91);
+
+  // ===== テーマ・言語・初期表示 =====
+  const themeBtn = $('btn-theme');
+  themeBtn.addEventListener('click', () => Theme.toggle(themeBtn));
+
+  function applyLanguage() {
+    I18n.applyStaticText();
+    Theme.refresh(themeBtn);
+    for (const render of renders) render();
+  }
+
+  // 切り替えたら、URL に ?lang= があればそれも書き換える（再読み込みで元の言語に戻らないように）
+  $('btn-lang').addEventListener('click', () => {
+    I18n.set(I18n.lang === 'ja' ? 'en' : 'ja');
+    const url = new URL(location.href);
+    if (url.searchParams.has('lang')) {
+      url.searchParams.set('lang', I18n.lang);
+      history.replaceState(null, '', url);
+    }
+    applyLanguage();
   });
-});
+
+  I18n.init();
+  applyLanguage();
+})();

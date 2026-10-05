@@ -13,8 +13,14 @@
     base91: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,./:;<=>?@[]^_`{|}~"'
   };
 
-  // RFC 4648 §3.4 が紛らわしいと挙げる文字（0 と O、1 と l と I）
-  const CONFUSABLE = ['0', 'O', '1', 'l', 'I'];
+  // RFC 4648 §3.4 が紛らわしいと挙げる組（0 と O、1 と l と I）
+  const CONFUSABLE_GROUPS = [['0', 'O'], ['1', 'l', 'I']];
+
+  // 字母の中で、同じ組の相手も字母にある文字（取り違えてもエラーにならない文字）
+  const confusablesIn = (kind) => CONFUSABLE_GROUPS
+    .map((g) => g.filter((c) => ALPHABETS[kind].includes(c)))
+    .filter((g) => g.length > 1)
+    .flat();
 
   const MAX_BYTES = 4096; // エンコードするバイト数の上限
   const MAX_CHARS = 8192; // デコードする文字数の上限
@@ -330,7 +336,8 @@
   globalThis.BaseXXCore = {
     KINDS,
     ALPHABETS,
-    CONFUSABLE,
+    CONFUSABLE_GROUPS,
+    confusablesIn,
     MAX_BYTES,
     MAX_CHARS,
     RATIOS,

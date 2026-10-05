@@ -194,3 +194,12 @@ test('乱数のデータは毎回同じ列。256バイトの長さは Base64 344
   assert.equal(Math.ceil(256 * C.RATIOS.base58), 350);
   assert.deepEqual(C.lengths(C.sampleBytes('zero', 256)), { base64: 344, base32: 416, base58: 256, base91: 293 });
 });
+
+test('紛らわしい組（0 と O、1 と l と I）の相手がそろっているのは Base64 と basE91 だけ', () => {
+  assert.deepEqual(C.confusablesIn('base64'), ['0', 'O', '1', 'l', 'I']);
+  assert.deepEqual(C.confusablesIn('base91'), ['0', 'O', '1', 'l', 'I']);
+  assert.deepEqual(C.confusablesIn('base32'), []);
+  assert.deepEqual(C.confusablesIn('base58'), []);
+  assert.ok(C.ALPHABETS.base32.includes('O') && !C.ALPHABETS.base32.includes('0'));
+  assert.ok(C.ALPHABETS.base58.includes('1') && !C.ALPHABETS.base58.includes('l') && !C.ALPHABETS.base58.includes('I'));
+});
