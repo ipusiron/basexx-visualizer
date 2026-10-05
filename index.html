@@ -35,10 +35,14 @@
       data-i18n="tab.overview">基本</button>
     <button type="button" class="tab-btn" role="tab" id="tab-convert" data-tab="convert" aria-controls="panel-convert" aria-selected="false" tabindex="-1"
       data-i18n="tab.convert">変換</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-bits" data-tab="bits" aria-controls="panel-bits" aria-selected="false" tabindex="-1"
+      data-i18n="tab.bits">しくみ</button>
     <button type="button" class="tab-btn" role="tab" id="tab-length" data-tab="length" aria-controls="panel-length" aria-selected="false" tabindex="-1"
       data-i18n="tab.length">長さと効率</button>
     <button type="button" class="tab-btn" role="tab" id="tab-misread" data-tab="misread" aria-controls="panel-misread" aria-selected="false" tabindex="-1"
       data-i18n="tab.misread">読み違い</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-variants" data-tab="variants" aria-controls="panel-variants" aria-selected="false" tabindex="-1"
+      data-i18n="tab.variants">変種と検査</button>
     <button type="button" class="tab-btn" role="tab" id="tab-base91" data-tab="base91" aria-controls="panel-base91" aria-selected="false" tabindex="-1"
       data-i18n="tab.base91">basE91</button>
   </nav>
@@ -181,6 +185,51 @@
         <p id="dec-status" class="status" aria-live="polite"></p>
         <div id="dec-results" class="candidates"></div>
       </div>
+
+      <div class="card">
+        <h3 data-i18n="otp.title">TOTPの鍵（otpauth://）</h3>
+        <p data-i18n="otp.lead">二要素認証のQRコードには、otpauth://で始まるURIが入っています。鍵（secret）はBase32で書き、=は付けないことになっています（Key Uri Format）。URIか鍵だけを入れると、鍵のバイト列と長さを確かめられます。</p>
+        <label class="field-label" for="otp-input" data-i18n="otp.inputLabel">otpauth://のURI、またはBase32の鍵</label>
+        <textarea id="otp-input" class="text-area" rows="2" spellcheck="false" autocomplete="off">otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&amp;issuer=Example</textarea>
+        <div class="sample-row">
+          <span class="sample-label" data-i18n="dec.samples">例を入れる</span>
+          <button type="button" class="btn small" data-otp-sample="otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&amp;issuer=Example"
+            data-i18n="otp.sample1">Key Uri Formatの例</button>
+          <button type="button" class="btn small"
+            data-otp-sample="otpauth://totp/ACME%20Co:john.doe@email.com?secret=HXDMVJECJJWSRB3HWIZR4IFUGFTMXBOZ&amp;issuer=ACME%20Co&amp;algorithm=SHA1&amp;digits=6&amp;period=30"
+            data-i18n="otp.sample2">すべての項目がある例</button>
+        </div>
+        <div id="otp-result" class="otp-result" aria-live="polite"></div>
+        <p class="note" data-i18n="otp.note">ワンタイムパスワードは計算しません。入力はどこにも送りません。本物の鍵は自分の端末で扱い、使い終わったら入力欄を消してください。</p>
+      </div>
+    </section>
+
+    <!-- ===== しくみ ===== -->
+    <section class="tabpanel" id="panel-bits" role="tabpanel" aria-labelledby="tab-bits" tabindex="0" hidden>
+      <h2 data-i18n="bits.title">しくみ</h2>
+      <p data-i18n="bits.lead">文字列がどのように各方式の文字になるかを、ビットと数の計算で1段ずつ見ます。</p>
+
+      <div class="card">
+        <label class="field-label" for="bits-input" data-i18n="bits.inputLabel" data-i18n-vars="max:12">テキスト（UTF-8、12バイトまで）</label>
+        <input type="text" id="bits-input" class="text-input mono" value="hi!" spellcheck="false" autocomplete="off">
+        <div class="chip-row" role="group" data-i18n-attr="aria-label:bits.groupLabel" aria-label="しくみを見る方式">
+          <button type="button" class="chip" data-bits-kind="base64" aria-pressed="true">Base64</button>
+          <button type="button" class="chip" data-bits-kind="base32" aria-pressed="false">Base32</button>
+          <button type="button" class="chip" data-bits-kind="base58" aria-pressed="false">Base58</button>
+          <button type="button" class="chip" data-bits-kind="base91" aria-pressed="false">basE91</button>
+        </div>
+        <p id="bits-status" class="status" aria-live="polite"></p>
+        <h4 data-i18n="bits.bytes">元のバイト列（16進と2進）</h4>
+        <div id="bits-bytes" class="byte-row"></div>
+        <p id="bits-note" class="pattern-desc"></p>
+        <div class="table-wrap">
+          <table class="bits-table">
+            <thead id="bits-head"></thead>
+            <tbody id="bits-body"></tbody>
+          </table>
+        </div>
+        <p id="bits-result" class="verdict ok" aria-live="polite"></p>
+      </div>
     </section>
 
     <!-- ===== 長さと効率 ===== -->
@@ -307,6 +356,72 @@
       </div>
     </section>
 
+    <!-- ===== 変種と検査 ===== -->
+    <section class="tabpanel" id="panel-variants" role="tabpanel" aria-labelledby="tab-variants" tabindex="0" hidden>
+      <h2 data-i18n="variants.title">変種と検査</h2>
+      <p data-i18n="variants.lead">同じ考え方でも、使う場所に合わせて字母や扱いを変えた変種があります。人が読み書きする文字列では、読み違いに強い字母と、誤りに気づくための検査値が役立ちます。</p>
+
+      <div class="card">
+        <h3 data-i18n="var.encTitle">変種で書く</h3>
+        <label class="field-label" for="var-input" data-i18n="var.inputLabel" data-i18n-vars="max:32">テキスト（UTF-8、32バイトまで）</label>
+        <input type="text" id="var-input" class="text-input mono" value="hello" spellcheck="false" autocomplete="off">
+        <p id="var-status" class="status" aria-live="polite"></p>
+        <div class="table-wrap">
+          <table class="var-table">
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="var.col.kind">方式</th>
+                <th scope="col" data-i18n="var.col.text">文字列</th>
+                <th scope="col" data-i18n="var.col.diff">違い</th>
+              </tr>
+            </thead>
+            <tbody id="var-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="detect.title">誤りに気づけるか</h3>
+        <p data-i18n="detect.lead">上のテキストを5つの形式で書き、1文字をほかの文字に置き換えたもの、隣どうしを入れ替えたものを、すべてデコードしてみます。デコードが失敗した数が、誤りに気づける数です。</p>
+        <div class="table-wrap">
+          <table class="detect-table">
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="detect.col.format">形式</th>
+                <th scope="col" data-i18n="detect.col.text">文字列</th>
+                <th scope="col" data-i18n="detect.col.subs">1文字の置き換え</th>
+                <th scope="col" data-i18n="detect.col.swaps">隣どうしの入れ替え</th>
+              </tr>
+            </thead>
+            <tbody id="detect-body"></tbody>
+          </table>
+        </div>
+        <h4 data-i18n="detect.tryTitle">自分で書き換えて試す</h4>
+        <div class="chip-row" role="group" data-i18n-attr="aria-label:detect.groupLabel" aria-label="試す形式">
+          <button type="button" class="chip" data-detect-format="base32" aria-pressed="false" data-i18n="detect.f.base32">Base32</button>
+          <button type="button" class="chip" data-detect-format="crockford" aria-pressed="false" data-i18n="detect.f.crockford">Crockford Base32</button>
+          <button type="button" class="chip" data-detect-format="crockfordCheck" aria-pressed="true" data-i18n="detect.f.crockfordCheck">Crockford Base32＋検査文字</button>
+          <button type="button" class="chip" data-detect-format="base58" aria-pressed="false" data-i18n="detect.f.base58">Base58</button>
+          <button type="button" class="chip" data-detect-format="base58check" aria-pressed="false" data-i18n="detect.f.base58check">Base58Check</button>
+        </div>
+        <label class="field-label" for="detect-input" data-i18n="detect.tryLabel">書き換える文字列</label>
+        <input type="text" id="detect-input" class="text-input mono" spellcheck="false" autocomplete="off">
+        <p id="detect-result" class="verdict" aria-live="polite"></p>
+        <p class="note" data-i18n="detect.note">検査値は誤りに気づくためのもので、直すことはできません。Crockfordの検査文字は37で割った余りなので、1文字の置き換えと隣どうしの入れ替えは必ず気づけますが、2文字以上が同時に変わると気づけないことがあります。Base58Checkの検査値は4バイトなので、でたらめな誤りが偶然合ってしまうのはおよそ43億回に1回です。</p>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="crock.title">Crockford Base32の読み替え</h3>
+        <p data-i18n="crock.lead">Crockford Base32は、I・L・O・Uを字母から外しています。読むときは大文字と小文字を区別せず、Oを0、IとLを1と読み替え、区切りのハイフンを無視します。</p>
+        <label class="field-label" for="crock-input" data-i18n="crock.inputLabel">読む文字列</label>
+        <input type="text" id="crock-input" class="text-input mono" value="dIjp-rv3f-j" spellcheck="false" autocomplete="off">
+        <label class="choice"><input type="checkbox" id="crock-check" checked> <span data-i18n="crock.check">最後の1文字を検査文字として確かめる</span></label>
+        <h4 data-i18n="crock.normalized">読み替えたあと</h4>
+        <pre class="mono out-text" id="crock-normalized"></pre>
+        <p id="crock-result" class="verdict" aria-live="polite"></p>
+      </div>
+    </section>
+
     <!-- ===== basE91 ===== -->
     <section class="tabpanel" id="panel-base91" role="tabpanel" aria-labelledby="tab-base91" tabindex="0" hidden>
       <h2 data-i18n="b91.title">basE91</h2>
@@ -350,6 +465,7 @@
   </footer>
 
   <script src="js/basexx-core.js"></script>
+  <script src="js/basexx-extras.js"></script>
   <script src="js/messages.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/theme.js"></script>

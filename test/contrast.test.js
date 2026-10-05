@@ -53,13 +53,15 @@ test('OS の設定によるダークと、手動のダークは同じ値', () =>
 });
 
 test('操作するボタン・リンク・入力欄は高さ44px以上、入力欄の文字は16px', () => {
-  for (const sel of ['.icon-btn {', '.tab-btn {', '.chip {', '.btn {', '.choice {', '.text-area {', '.range {', '.site-footer a {']) {
+  for (const sel of ['.icon-btn {', '.tab-btn {', '.chip {', '.btn {', '.choice {', '.text-area {', '.text-input {', '.range {', '.site-footer a {']) {
     const start = css.indexOf(sel);
     assert.ok(start >= 0, sel);
     assert.match(css.slice(start, css.indexOf('}', start)), /min-height: 44px/, sel);
   }
-  const start = css.indexOf('.text-area {');
-  assert.match(css.slice(start, css.indexOf('}', start)), /font-size: 16px/);
+  for (const sel of ['.text-area {', '.text-input {']) {
+    const start = css.indexOf(sel);
+    assert.match(css.slice(start, css.indexOf('}', start)), /font-size: 16px/, sel);
+  }
 });
 
 test('本文の書体は欧文の書体を先に置く（日本語の書体のバックスラッシュが ¥ の形で描かれないように）', () => {

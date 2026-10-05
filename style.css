@@ -422,6 +422,18 @@ thead th { background: var(--surface); }
 .status { min-height: 1.7em; margin: 8px 0; }
 .status.error { color: var(--error-text); }
 
+.text-input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 16px;
+}
+
 /* ===== 出力とデコードの候補（左の色の帯で方式を見分ける） ===== */
 .outputs,
 .candidates {
@@ -591,6 +603,36 @@ thead th { background: var(--surface); }
 
 .outcome { padding: 0 4px; border-radius: 4px; }
 .others-table td { overflow-wrap: anywhere; }
+
+/* ===== しくみ・変種と検査・TOTP ===== */
+.byte-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.byte {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.byte-hex { font-weight: 700; }
+.byte-bin { color: var(--muted); font-size: 14px; }
+.bit-added { color: var(--muted); text-decoration: underline; }
+
+.bits-table td, .var-table td, .detect-table td { overflow-wrap: anywhere; }
+.var-table th, .detect-table th[scope="row"] { white-space: nowrap; }
+
+.otp-list { margin: 10px 0 0; }
+.otp-list dt { color: var(--muted); font-size: 14px; }
+.otp-list dd { margin: 0 0 6px; overflow-wrap: anywhere; }
+.verdict .bullets { font-weight: 400; }
 
 /* ===== フッター ===== */
 .site-footer {
