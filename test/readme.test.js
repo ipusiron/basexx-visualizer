@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { read, core } from './load.js';
+import { read, core, load } from './load.js';
 
 const C = core();
+const X = load('js/basexx-extras.js').BaseXXExtras;
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const DOCS = {
@@ -13,7 +14,10 @@ const DOCS = {
     file: 'README.md', switcher: '[English](README.en.md) · 日本語', day: '**Day052 - 生成AIで作るセキュリティツール100**',
     shots: /^assets\/screenshot\d*\.png$/,
     sec: { tech: '🔬 技術的な説明', limits: '⚠️ 注意と限界', refs: '🔗 参考', tree: '📁 ディレクトリー構造', about: '🛠️ このツールについて', uses: '🎯 ユースケース' },
-    head: { encode: '| 入力 | Base64 |', length: '| 元のバイト数 |', misread: '| 取り違え |' },
+    head: { encode: '| 入力 | Base64 |', length: '| 元のバイト数 |', misread: '| 取り違え |', variants: '| 方式 | helloを書いた結果 |', detect: '| 形式 | 文字列 |' },
+    variantNames: { 'Crockford Base32＋検査文字': 'crockfordCheck' },
+    count: (c) => `${c.total}通り中${c.detected}通り`,
+    totp: ['10バイト（80ビット）', '20バイト（160ビット）'],
     hexTag: '（16進）',
     names: { 'JWTのヘッダー': '{"alg":"HS256","typ":"JWT"}', 'Sample Text': 'Sample Text', 'Hello>': 'Hello>', 'Hello?World': 'Hello?World' },
     space: '空白',
@@ -32,7 +36,11 @@ const DOCS = {
     shots: /^assets\/en\/screenshot\d*\.png$/,
     sec: { tech: '🔬 Technical notes', limits: '⚠️ Notes and limitations', refs: '🔗 References', tree: '📁 Directory structure', about: '🛠️ About this tool',
       uses: '🎯 Use cases' },
-    head: { encode: '| Input | Base64 |', length: '| Original bytes |', misread: '| Mix-up |' },
+    head: { encode: '| Input | Base64 |', length: '| Original bytes |', misread: '| Mix-up |',
+      variants: '| Scheme | "hello" written |', detect: '| Format | String |' },
+    variantNames: { 'Crockford Base32 + check symbol': 'crockfordCheck' },
+    count: (c) => `${c.detected} of ${c.total}`,
+    totp: ['10 bytes (80 bits)', '20 bytes (160 bits)'],
     hexTag: ' (hex)',
     names: { 'A JWT header': '{"alg":"HS256","typ":"JWT"}', 'Sample Text': 'Sample Text', 'Hello>': 'Hello>', 'Hello?World': 'Hello?World' },
     space: 'space',
@@ -183,6 +191,36 @@ for (const [lang, d] of Object.entries(DOCS)) {
     }
   });
 
+  test(`${d.file}: 変種の表・誤りの検出の表・genesis のアドレス・TOTP の鍵の長さは、計算部で計算し直した値と同じ`, () => {
+    const tech = section(d.text, d.sec.tech);
+    const enc = {
+      Base64: (b) => C.encodeBase64(b), Base64url: (b) => X.encodeBase64url(b), Base32: (b) => C.encodeBase32(b), Base32hex: (b) => X.encodeBase32hex(b),
+      'Crockford Base32': (b) => X.encodeCrockford(b), crockfordCheck: (b) => X.encodeCrockford(b, true), Base58: (b) => C.encodeBase58(b),
+      Base58Check: (b) => X.encodeBase58Check(b)
+    };
+    const hello = C.utf8('hello');
+    const rows = table(tech, d.head.variants);
+    assert.equal(rows.length, 8);
+    for (const [name, text] of rows) assert.equal(code(text), enc[d.variantNames[name] || name](hello), name);
+    const det = table(tech, d.head.detect);
+    const fmt = { Base32: 'base32', 'Crockford Base32': 'crockford', Base58: 'base58', Base58Check: 'base58check' };
+    assert.equal(det.length, X.FORMAT_NAMES.length);
+    for (const [name, text, subs, swaps] of det) {
+      const f = d.variantNames[name] || fmt[name];
+      assert.ok(f, name);
+      assert.equal(code(text), X.encodeFormat(f, hello), name);
+      const r = X.detection(f, code(text));
+      assert.deepEqual([subs, swaps], [d.count(r.subs), d.count(r.swaps)], name);
+    }
+    assert.ok(tech.includes(`\`${C.encodeBase32(C.utf8('f'))}\``) && tech.includes(`\`${X.encodeCrockford(C.utf8('f'))}\``));
+    const payload = Uint8Array.from(Buffer.from('0062E907B15CBF27D5425399EBF6F0FB50EBB88F18', 'hex'));
+    assert.ok(tech.includes('`62E907B15CBF27D5425399EBF6F0FB50EBB88F18`'));
+    assert.ok(tech.includes(`\`${X.encodeBase58Check(payload)}\``));
+    const [a, b] = ['JBSWY3DPEHPK3PXP', 'HXDMVJECJJWSRB3HWIZR4IFUGFTMXBOZ'].map((s) => X.parseOtpauth(s));
+    assert.deepEqual([a.key.length, a.bits, b.key.length, b.bits], [10, 80, 20, 160]);
+    for (const claim of d.totp) assert.ok(tech.includes(claim), claim);
+  });
+
   test(`${d.file}: 注意と限界に書いた上限は、計算部の上限と同じ`, () => {
     assert.ok(section(d.text, d.sec.limits).includes(d.limits(C.MAX_BYTES, C.MAX_CHARS)));
   });
@@ -208,16 +246,16 @@ for (const [lang, d] of Object.entries(DOCS)) {
 test('参考文献の URL は日英で同じ', () => {
   const urls = (d) => [...section(d.text, d.sec.refs).matchAll(/\]\((https:\/\/[^)\s]+)\)/g)].map((m) => m[1]);
   assert.deepEqual(urls(DOCS.en), urls(DOCS.ja));
-  assert.equal(urls(DOCS.ja).length, 10);
+  assert.equal(urls(DOCS.ja).length, 14);
 });
 
-test('画像: 参照はすべて実在する。スクリーンショットは日本語版が assets/、英語版が assets/en/ の6枚。どこからも参照しない画像は置かない', () => {
+test('画像: 参照はすべて実在する。スクリーンショットは日本語版が assets/、英語版が assets/en/ の8枚。どこからも参照しない画像は置かない', () => {
   const refs = {};
   for (const [lang, d] of Object.entries(DOCS)) {
     refs[lang] = [...d.text.matchAll(/!\[[^\]]*\]\((assets\/[^)]+)\)/g)].map((m) => m[1]);
     for (const r of refs[lang]) assert.ok(fs.existsSync(path.join(ROOT, r)), r);
     const shots = refs[lang].filter((r) => /screenshot/.test(r));
-    assert.equal(shots.length, 6, lang);
+    assert.equal(shots.length, 8, lang);
     for (const r of shots) {
       assert.match(r, d.shots, r);
       assert.ok(fs.statSync(path.join(ROOT, r)).size <= 300 * 1024, r);

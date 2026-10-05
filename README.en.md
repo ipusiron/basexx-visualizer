@@ -10,7 +10,7 @@ English · [日本語](README.md)
 
 **Day052 - 100 Security Tools with Generative AI**
 
-BaseXX Visualizer is a learning tool that compares Base32, Base58 and basE91 with Base64: the characters each one uses (the alphabet), the length, and how well each holds up when people read and type the strings. It encodes with all four schemes at once, lists what each of the four schemes reads from a string, and shows what happens when look-alike characters are mixed up.
+BaseXX Visualizer is a learning tool that compares Base32, Base58 and basE91 with Base64: the characters each one uses (the alphabet), the length, and how well each holds up when people read and type the strings. It encodes with all four schemes at once, lists what each of the four schemes reads from a string, and shows what happens when look-alike characters are mixed up. It also explains the bit grouping step by step, tests whether variants and check values notice mistakes, and inspects TOTP secrets.
 
 ---
 
@@ -48,6 +48,14 @@ You can try it directly in your browser.
 >
 >*How basE91 works and examples that match the original implementation (dark mode)*
 
+>![How "hi!" becomes Base64](assets/en/screenshot7.png)
+>
+>*The 24 bits of "hi!" cut into 6-bit groups and turned into Base64 characters*
+
+>![Can mistakes be noticed](assets/en/screenshot8.png)
+>
+>*Trying every single replacement and neighbor swap: only formats with a check value notice the mistakes*
+
 ---
 
 ## 🔑 Practical background
@@ -75,6 +83,11 @@ In these cases people may confuse look-alike characters such as O (letter) and 0
 - Encode: text (UTF-8) or hex input is encoded with Base64, Base32, Base58 and basE91 at once. Shows the number of characters and the ratio to the original, and each result can be copied. Padding Base64 and Base32 with = is optional
 - Decode: a string is read with the four schemes and every scheme that can read it is listed (the bytes in hex, and the UTF-8 text when it is readable as such). For schemes that cannot read it, the kind of error and its position (which character at which position) are shown. The input is never overwritten
 - Spaces and line breaks: whether decoding skips them is selectable (the number skipped is shown)
+- TOTP secret: reads an otpauth:// URI or a Base32 secret and shows the issuer, account name, algorithm, digits and period, and the key bytes and length. Notes are shown against RFC 4226 (at least 128 bits required, 160 bits recommended) and RFC 6238 (key as long as the HMAC output recommended). One-time passwords are not computed
+
+### How it works
+
+- Shows text of up to 12 bytes step by step: 6-bit and 5-bit groups for Base64 and Base32, a table of divisions by 58 for Base58, and 13-bit and 14-bit groups split into two characters for basE91
 
 ### Length
 
@@ -86,6 +99,13 @@ In these cases people may confuse look-alike characters such as O (letter) and 0
 
 - Choose one of five mix-ups (O→0, I→l, I→1, +→space, /→\) and see what happens when it occurs in a Base64 string. The result is one of three: "same data", "different data without an error" or "error"
 - Lists whether the same mix-up can happen if the same data had been written in Base32, Base58 or basE91, and what happens if it does
+
+### Variants and checks
+
+- Writing in the variants: the same text in Base64, Base64url, Base32, Base32hex, Crockford Base32 (with and without a check symbol), Base58 and Base58Check, with the differences
+- Can mistakes be noticed: for five formats (Base32, Crockford Base32, Crockford Base32 + check symbol, Base58, Base58Check), every single replacement and neighbor swap is tried and the failed decodings are counted
+- Try changing it yourself: choose a format, edit the string, and see whether the mistake is noticed (error) or not (different data)
+- How Crockford Base32 reads characters: case does not matter, O is read as 0, I and L as 1, and hyphens are ignored. The check symbol is verified too
 
 ### basE91
 
@@ -106,6 +126,9 @@ In these cases people may confuse look-alike characters such as O (letter) and 0
 2. Type a string into the lower field to see what each of the four schemes reads. The string alone does not tell which scheme produced it; judge from the content of the readable results.
 3. In the "Length" tab, change the length and content of the data to compare the number of characters per scheme.
 4. In the "Misreading" tab, choose a mix-up and see whether it causes an error or silently gives different data. Unchecking "Skip spaces and line breaks" changes the result of +→space.
+5. In the "How it works" tab, choose a scheme to see the arithmetic from the original bytes to the characters in a table.
+6. In the "Variants" tab, compare how many mistakes formats with and without a check value notice. You can also edit a string yourself in the field below.
+7. Enter an otpauth:// URI or a Base32 secret at the bottom of the "Convert" tab to check the key bytes and length.
 
 ---
 
@@ -167,6 +190,41 @@ For 256 bytes of 00, Base58 gives 256 characters (all "1") and basE91 gives 293 
 
 When a URL query string is parsed as application/x-www-form-urlencoded, + becomes a space (WHATWG URL Standard). RFC 4648 also defines a URL-safe Base64 (base64url) that uses - and _ instead of + and /.
 
+### Variants
+
+The results of writing "hello" (recomputed by the tests).
+
+| Scheme | "hello" written | Difference |
+|---|---|---|
+| Base64 | `aGVsbG8=` | Standard |
+| Base64url | `aGVsbG8` | - and _ instead of + and /, without = (RFC 4648 §5) |
+| Base32 | `NBSWY3DP` | Standard |
+| Base32hex | `D1IMOR3F` | 0–9 and A–V. The order of the strings matches the order of the original bytes (RFC 4648 §7) |
+| Crockford Base32 | `D1JPRV3F` | Without I, L, O and U |
+| Crockford Base32 + check symbol | `D1JPRV3FJ` | Adds a check symbol: the number modulo 37 |
+| Base58 | `Cn8eVZg` | The Bitcoin alphabet |
+| Base58Check | `2L5B5yqsVG8Vt` | Appends the first 4 bytes of a double SHA-256 before encoding |
+
+Crockford Base32 is a notation for numbers, so when the bits are not a multiple of 5, zeros are added at the top (RFC 4648 Base32 adds them at the bottom). So the single byte "f" is `MY======` in Base32 and `36` in Crockford Base32. When reading, case does not matter, O is read as 0, I and L as 1, and hyphens are ignored.
+
+### Error detection experiment
+
+"hello" is written in five formats, and every string with one character replaced by another character allowed at that position, or with two different neighbors swapped, is decoded. A failed decoding counts as a noticed mistake.
+
+| Format | String | One character replaced | Neighbors swapped |
+|---|---|---|---|
+| Base32 | `NBSWY3DP` | 0 of 248 | 0 of 7 |
+| Crockford Base32 | `D1JPRV3F` | 0 of 248 | 0 of 7 |
+| Crockford Base32 + check symbol | `D1JPRV3FJ` | 284 of 284 | 8 of 8 |
+| Base58 | `Cn8eVZg` | 0 of 399 | 0 of 6 |
+| Base58Check | `2L5B5yqsVG8Vt` | 741 of 741 | 12 of 12 |
+
+Without a check, replacing a character with another one from the alphabet still decodes, so there is no error. The Crockford check symbol is the number modulo 37, and since 37 is a prime greater than 32, a single replacement or a swap of neighbors always changes the remainder. Base58Check, like Bitcoin's `EncodeBase58Check`, appends the first 4 bytes of a double SHA-256. Writing the version 00 and the public key hash `62E907B15CBF27D5425399EBF6F0FB50EBB88F18` in Base58Check gives the address of the Bitcoin genesis block, `1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa`.
+
+### TOTP secrets
+
+The key `JBSWY3DPEHPK3PXP` in the Key Uri Format example is "Hello!" followed by DE AD BE EF: 10 bytes (80 bits). RFC 4226 requires keys of at least 128 bits and recommends 160 bits, so this tool warns that it is short. The other example in the same document, `HXDMVJECJJWSRB3HWIZR4IFUGFTMXBOZ`, is 20 bytes (160 bits), the length of the SHA1 output.
+
 ---
 
 ## 🎯 Use cases
@@ -181,6 +239,9 @@ When a URL query string is parsed as application/x-www-form-urlencoded, + become
 - Hobbies and creative work: when making puzzles or games, use the look of Base64 (often ends with =, mixes upper and lower case) and Base32 (only capital letters and 2–7) as clues
 - Research: compare the efficiency of a lesser-known scheme such as basE91 on data full of 00 and on random data
 - Writing documents: show in an article or internal document that Base64 makes the text about 1.33 times longer, with a screenshot of the bar chart
+- Designing numbers and codes: decide whether strings that people type, such as member numbers or coupon codes, should carry a check symbol, by looking at the error detection experiment (0% without a check, 100% with one)
+- Reviewing two-factor authentication: check whether the TOTP secrets your service issues meet the 128 bits of RFC 4226 by entering the otpauth:// URI (for handling real secrets, see "Notes and limitations")
+- Math classes: use the table of divisions by 58 in the "How it works" tab to practice converting numbers to base n. Reading the remainders from the bottom up is visible as is
 
 ---
 
@@ -191,7 +252,8 @@ When a URL query string is parsed as application/x-www-form-urlencoded, + become
 - The page is built with the DOM (`textContent`), never `innerHTML`
 - `<meta name="referrer" content="no-referrer">`; external links use `rel="noopener noreferrer"`
 - Only the language and theme choices are stored in the browser (the page works even where storage is unavailable)
-- No external libraries or CDNs
+- No external libraries or CDNs (SHA-256 is implemented here too, and the tests compare it with Node.js `crypto`)
+- TOTP secrets are also read only in the browser, and never stored or sent
 
 ---
 
@@ -199,7 +261,11 @@ When a URL query string is parsed as application/x-www-form-urlencoded, + become
 
 - Encoding does not keep secrets. Anyone who knows the scheme can decode any of them
 - Input is limited to 4096 bytes, and decoding to 8192 characters
-- base64url, Base32hex and Crockford Base32 are not read. Base58Check (the check value of Bitcoin addresses) is not computed, so the validity of an address cannot be checked
+- "How it works" handles text of up to 12 bytes, and "Variants" up to 32 bytes
+- The decode candidates in the "Convert" tab are Base64, Base32, Base58 and basE91. The variants (Base64url, Base32hex, Crockford Base32, Base58Check) are handled in the "Variants" tab
+- Base58Check checks only the check value. It does not judge the kind of Bitcoin address (the leading version byte)
+- The error detection experiment tries each single replacement and neighbor swap once; mistakes in two or more characters are not tried
+- One-time passwords are not computed for TOTP. The tool only reads the secret and checks its length
 - The results of "Misreading" follow this tool's decoding rules (the setting for skipping spaces and line breaks). Other implementations may give different results, for example by skipping characters outside the alphabet
 - When entering a real secret or token, open the page on your own device and clear the fields afterwards
 
@@ -214,7 +280,8 @@ npm test
 - Runs with `node --test` on Node.js 22 or later, with no dependencies (no `npm install` needed)
 - Runs on GitHub Actions for every push and pull request
 - `test/core.test.js`: known answers from RFC 4648, draft-msporny-base58-03 and the original basE91, round trips (0–300 bytes), kinds and positions of errors, handling of spaces, length formulas
-- `test/readme.test.js`: recomputes the README tables (encoding examples, lengths, misreading) with the core module, and checks the headings, images and directory structure of both READMEs
+- `test/extras.test.js`: Base64url and Base32hex (RFC 4648 §10 vectors), Crockford Base32 known answers and reading rules, SHA-256 (matches Node.js `crypto` for 0–300 bytes), Base58Check (the genesis address), error detection, the step tables, the Key Uri Format examples
+- `test/readme.test.js`: recomputes the README tables (encoding examples, lengths, misreading, variants, error detection) with the core module, and checks the headings, images and directory structure of both READMEs
 - `test/html.test.js`, `test/contrast.test.js`, `test/messages.test.js`, `test/i18n.test.js`, `test/format.test.js`: CSP, tab ARIA, dictionary and page text, color contrast (4.5:1 and 3:1), formatting
 
 ---
@@ -229,6 +296,10 @@ npm test
 - [RFC 5155 DNS Security (DNSSEC) Hashed Authenticated Denial of Existence](https://www.rfc-editor.org/rfc/rfc5155) (Base32hex in NSEC3)
 - [WHATWG URL Standard application/x-www-form-urlencoded](https://url.spec.whatwg.org/#application/x-www-form-urlencoded)
 - [RFC 2045 MIME Part One](https://www.rfc-editor.org/rfc/rfc2045), [RFC 2397 The "data" URL scheme](https://www.rfc-editor.org/rfc/rfc2397), [RFC 7468 Textual Encodings of PKIX, PKCS, and CMS Structures](https://www.rfc-editor.org/rfc/rfc7468)
+- [Douglas Crockford, Base 32](https://www.crockford.com/base32.html)
+- [Bitcoin Core src/base58.cpp](https://github.com/bitcoin/bitcoin/blob/master/src/base58.cpp) (`EncodeBase58Check`)
+- [RFC 4226 HOTP: An HMAC-Based One-Time Password Algorithm](https://www.rfc-editor.org/rfc/rfc4226) (R6, key length)
+- [RFC 6238 TOTP: Time-Based One-Time Password Algorithm](https://www.rfc-editor.org/rfc/rfc6238) (§5.1, key length)
 
 ---
 
@@ -263,7 +334,9 @@ basexx-visualizer/
 │   ├── screenshot4.png       # Length bar chart (Japanese)
 │   ├── screenshot5.png       # Misreading (Japanese)
 │   ├── screenshot6.png       # basE91 (Japanese, dark)
-│   └── en/                   # Screenshots of the English page (the same six)
+│   ├── screenshot7.png       # How it works (Japanese)
+│   ├── screenshot8.png       # Can mistakes be noticed (Japanese)
+│   └── en/                   # Screenshots of the English page (the same eight)
 ├── .github/                  # GitHub settings
 │   └── workflows/            # GitHub Actions workflows
 │       └── test.yml          # Runs npm test on push and pull request
