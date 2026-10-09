@@ -265,3 +265,23 @@ test('画像: 参照はすべて実在する。スクリーンショットは日
   const files = (dir) => fs.readdirSync(path.join(ROOT, dir)).filter((f) => /\.(png|jpg)$/.test(f)).map((f) => `${dir}/${f}`);
   for (const f of [...files('assets'), ...files('assets/en')]) assert.ok(used.has(f), `参照していない画像: ${f}`);
 });
+
+test('ユースケースの「このツールならではの使い方」の値は計算部と同じ（日英）', () => {
+  const ja = DOCS.ja.text, en = DOCS.en.text;
+  const bytes = C.utf8('hello');
+  const len = C.lengths(bytes);
+  assert.deepEqual([len.base64, len.base32, len.base58], [8, 8, 7]);
+  assert.equal(C.RATIOS.base64.toFixed(2), '1.33');
+  assert.equal(C.RATIOS.base32, 1.6);
+  for (const t of [ja, en]) assert.ok(t.includes('1.33') && t.includes('1.6'));
+  for (const c of ['0', 'O', 'I', 'l']) assert.equal(C.ALPHABETS.base58.includes(c), false, c);
+  for (const c of ['0', '1', '8', '9']) assert.equal(C.ALPHABETS.base32.includes(c), false, c);
+  assert.ok(ja.includes('0・O・I・l') && en.includes('0, O, I or l'));
+  assert.ok(ja.includes('0・1・8・9') && en.includes('0, 1, 8 and 9'));
+  assert.equal(C.encode('base64', bytes), 'aGVsbG8=');
+  assert.equal(C.encode('base32', bytes), 'NBSWY3DP');
+  assert.equal(C.encode('base58', bytes), 'Cn8eVZg');
+  for (const t of [ja, en]) {
+    for (const s of ['aGVsbG8=', 'NBSWY3DP', 'Cn8eVZg']) assert.ok(t.includes('`' + s + '`'), s);
+  }
+});
