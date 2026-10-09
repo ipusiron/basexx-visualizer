@@ -229,6 +229,12 @@ The key `JBSWY3DPEHPK3PXP` in the Key Uri Format example is "Hello!" followed by
 
 ## 🎯 Use cases
 
+Ways of using this tool in particular
+
+- Confirming the ratio by which encoding lengthens the text (encoding and base-n classes): encoding the 5 bytes (40 bits) of `hello` gives 8 characters in Base64 at 6 bits per character, 8 characters in Base32 at 5 bits per character, and 7 characters in Base58. Base64 is about 1.33 times the original (4 over 3) and Base32 is 1.6 times. You can confirm with lengths and ratios that how many bits are grouped into one character sets how much the character count grows
+- Confirming that human-friendly alphabets drop look-alike characters (code-design classes): the Base58 alphabet contains none of 0, O, I or l, to avoid confusing 0 with O and 1 with I and l. Base32 (RFC 4648) instead drops 0, 1, 8 and 9 and keeps O and I. You can confirm, from the alphabets themselves, the design idea of which characters to drop to cut misreadings in codes that are written out by hand or read over the phone
+- Confirming that the same bytes become different strings per scheme (encoding identification and CTF): `hello` becomes `aGVsbG8=` in Base64, `NBSWY3DP` in Base32 and `Cn8eVZg` in Base58. From the look, such as a trailing `=` or only uppercase and 2 to 7, you can guess which scheme was used. It is practice in reading an unknown string in the four schemes and narrowing the scheme from the character set
+
 - Security learning: confirm, by pasting into the decode field, that a JWT header or a Basic authentication value is merely written in Base64 and is not encryption. This version does not read the - and _ of base64url, so parts containing them cannot be read
 - CTFs and puzzles: read an unknown string with the four schemes and see which ones can read it. Since several schemes may succeed, it is practice in judging by the decoded content
 - Setting up two-factor authentication: when typing a secret (Base32) into an authenticator app fails, check in the decode field whether a character outside the alphabet (such as 0, 1, 8 or 9) slipped in. For handling real secrets, see "Notes and limitations"
